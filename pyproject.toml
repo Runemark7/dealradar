@@ -1,0 +1,11 @@
+[project]
+name = "crawl4aitest"
+version = "0.1.0"
+description = "Blocket scraper and API using Playwright"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "playwright>=1.40.0",
+]
