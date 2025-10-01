@@ -5,7 +5,8 @@ image:
   pullPolicy: Always
   tag: "b42d3fc5fecdaf6e04a2a3c8db0880c6b740fce5"
 
-imagePullSecrets: []
+imagePullSecrets:
+  - name: ghcr-secret
 nameOverride: ""
 fullnameOverride: ""
 
