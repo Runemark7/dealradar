@@ -1,9 +1,9 @@
 replicaCount: 1
 
 image:
-  repository: ""
+  repository: "ghcr.io/runemark7/dealradar"
   pullPolicy: Always
-  tag: ""
+  tag: "placeholder"
 
 imagePullSecrets: []
 nameOverride: ""
