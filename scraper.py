@@ -127,25 +127,29 @@ async def fetch_blocket_api(ad_id, page=None):
 
         # If page provided, reuse it; otherwise create temporary browser
         if page:
+            api_response = None
+
             # Intercept API requests
             async def handle_response(response):
-                nonlocal api_response_data
+                nonlocal api_response
                 if 'api.blocket.se' in response.url and ad_id in response.url and response.status == 200:
                     # Only capture the main content API, not related_content
                     if '/search_bff/v2/content/' in response.url and 'related_content' not in response.url:
-                        try:
-                            api_response_data = await response.json()
-                            print(f"✓ Intercepted API response")
-                        except:
-                            pass
+                        api_response = response
 
             page.on('response', handle_response)
 
             try:
                 # Visit the page - this will trigger the API call
-                await page.goto(url, wait_until='domcontentloaded', timeout=30000)
-                # Wait a bit for API call to complete
-                await asyncio.sleep(2)
+                await page.goto(url, wait_until='networkidle', timeout=30000)
+
+                # Parse JSON BEFORE removing listener
+                if api_response:
+                    try:
+                        api_response_data = await api_response.json()
+                        print(f"✓ Intercepted API response")
+                    except Exception as e:
+                        print(f"✗ JSON parse failed: {e}")
             finally:
                 # Always remove the listener, even if navigation fails
                 page.remove_listener('response', handle_response)
@@ -159,24 +163,28 @@ async def fetch_blocket_api(ad_id, page=None):
                 )
                 page = await context.new_page()
 
+                api_response = None
+
                 # Intercept API requests
                 async def handle_response(response):
-                    nonlocal api_response_data
+                    nonlocal api_response
                     if 'api.blocket.se' in response.url and ad_id in response.url and response.status == 200:
                         # Only capture the main content API, not related_content
                         if '/search_bff/v2/content/' in response.url and 'related_content' not in response.url:
-                            try:
-                                api_response_data = await response.json()
-                                print(f"✓ Intercepted API response")
-                            except:
-                                pass
+                            api_response = response
 
                 page.on('response', handle_response)
 
                 # Visit the page - this will trigger the API call
-                await page.goto(url, wait_until='domcontentloaded', timeout=30000)
-                # Wait a bit for API call to complete
-                await asyncio.sleep(2)
+                await page.goto(url, wait_until='networkidle', timeout=30000)
+
+                # Parse JSON BEFORE closing browser
+                if api_response:
+                    try:
+                        api_response_data = await api_response.json()
+                        print(f"✓ Intercepted API response")
+                    except Exception as e:
+                        print(f"✗ JSON parse failed: {e}")
 
                 await browser.close()
 
