@@ -57,10 +57,15 @@ async def fetch_search_results(category_id, limit=10):
             page.on('response', handle_response)
 
             # Visit search page to trigger API call
-            await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
+            # Use networkidle to wait for all network activity including search API
+            try:
+                await page.goto(search_url, wait_until='networkidle', timeout=45000)
+            except Exception as e:
+                print(f"[DEBUG] Page load warning: {e}")
+                # Continue anyway, maybe some resources timed out but search API worked
 
-            # Wait a bit for the response to arrive
-            await asyncio.sleep(3)
+            # Give a bit more time for late API calls
+            await asyncio.sleep(2)
 
             # Parse JSON BEFORE closing browser
             if api_response:
