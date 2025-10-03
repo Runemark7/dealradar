@@ -25,6 +25,7 @@ async def fetch_search_results(category_id, limit=10):
 
         search_url = f"https://www.blocket.se/annonser/hela_sverige/datorer?cg={category_id}"
         search_api_data = None
+        api_captured = False
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -35,23 +36,29 @@ async def fetch_search_results(category_id, limit=10):
 
             # Intercept search API requests
             async def handle_response(response):
-                nonlocal search_api_data
+                nonlocal search_api_data, api_captured
                 if 'api.blocket.se/search_bff/v2/content' in response.url and response.status == 200:
                     # Make sure it's the search endpoint, not individual content
                     if 'cg=' in response.url and '/content?' in response.url:
                         try:
                             search_api_data = await response.json()
+                            api_captured = True
                             print(f"✓ Intercepted search API response")
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"✗ Failed to parse API response: {e}")
 
             page.on('response', handle_response)
 
             # Visit search page to trigger API call
             await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
-            # Wait for API call to complete
-            await asyncio.sleep(3)
 
+            # Wait for API to be captured (max 5 seconds)
+            for i in range(50):  # 50 * 0.1 = 5 seconds
+                if api_captured:
+                    break
+                await asyncio.sleep(0.1)
+
+            # Close browser AFTER all async operations complete
             await browser.close()
 
             if search_api_data and 'data' in search_api_data:
@@ -70,7 +77,9 @@ async def fetch_search_results(category_id, limit=10):
                 return []
 
     except Exception as e:
+        import traceback
         print(f"ERROR: Failed to fetch search results: {e}")
+        traceback.print_exc()
         return []
 
 
@@ -174,7 +183,9 @@ async def fetch_blocket_api(ad_id, page=None):
             return None
 
     except Exception as e:
+        import traceback
         print(f"ERROR: Failed to fetch from API: {e}")
+        traceback.print_exc()
         return None
 
 
