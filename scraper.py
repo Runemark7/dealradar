@@ -36,14 +36,23 @@ async def fetch_search_results(category_id, limit=10):
 
             # Store response object to parse after navigation
             api_response = None
+            all_responses = []
 
             # Intercept search API requests
             async def handle_response(response):
                 nonlocal api_response
+                # Log ALL api.blocket.se responses for debugging
+                if 'api.blocket.se' in response.url:
+                    all_responses.append(f"{response.url} [{response.status}]")
+
                 if 'api.blocket.se/search_bff/v2/content' in response.url and response.status == 200:
+                    print(f"[DEBUG] Found API response: {response.url}")
                     # Make sure it's the search endpoint, not individual content
                     if 'cg=' in response.url and '/content?' in response.url:
+                        print(f"[DEBUG] Matched search criteria, storing response")
                         api_response = response
+                    else:
+                        print(f"[DEBUG] Doesn't match search criteria (cg={('cg=' in response.url)}, content={('/content?' in response.url)})")
 
             page.on('response', handle_response)
 
@@ -51,7 +60,7 @@ async def fetch_search_results(category_id, limit=10):
             await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
 
             # Wait a bit for the response to arrive
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
 
             # Parse JSON BEFORE closing browser
             if api_response:
@@ -60,6 +69,11 @@ async def fetch_search_results(category_id, limit=10):
                     print(f"✓ Intercepted search API response")
                 except Exception as e:
                     print(f"✗ Failed to parse API response: {e}")
+            else:
+                print(f"[DEBUG] No API response captured")
+                print(f"[DEBUG] All API responses seen ({len(all_responses)}):")
+                for r in all_responses:
+                    print(f"  - {r}")
 
             # Close browser AFTER all async operations complete
             await browser.close()
