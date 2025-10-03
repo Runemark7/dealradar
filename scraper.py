@@ -108,11 +108,14 @@ async def fetch_blocket_api(ad_id, page=None):
 
             page.on('response', handle_response)
 
-            # Visit the page - this will trigger the API call
-            await page.goto(url, wait_until='networkidle', timeout=60000)
-
-            # Remove the listener to prevent memory leaks
-            page.remove_listener('response', handle_response)
+            try:
+                # Visit the page - this will trigger the API call
+                await page.goto(url, wait_until='domcontentloaded', timeout=30000)
+                # Wait a bit for API call to complete
+                await asyncio.sleep(2)
+            finally:
+                # Always remove the listener, even if navigation fails
+                page.remove_listener('response', handle_response)
 
         else:
             # Fallback: create temporary browser instance
@@ -138,7 +141,9 @@ async def fetch_blocket_api(ad_id, page=None):
                 page.on('response', handle_response)
 
                 # Visit the page - this will trigger the API call
-                await page.goto(url, wait_until='networkidle', timeout=60000)
+                await page.goto(url, wait_until='domcontentloaded', timeout=30000)
+                # Wait a bit for API call to complete
+                await asyncio.sleep(2)
 
                 await browser.close()
 
