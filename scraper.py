@@ -34,29 +34,32 @@ async def fetch_search_results(category_id, limit=10):
             )
             page = await context.new_page()
 
+            # Store response object to parse after navigation
+            api_response = None
+
             # Intercept search API requests
             async def handle_response(response):
-                nonlocal search_api_data, api_captured
+                nonlocal api_response
                 if 'api.blocket.se/search_bff/v2/content' in response.url and response.status == 200:
                     # Make sure it's the search endpoint, not individual content
                     if 'cg=' in response.url and '/content?' in response.url:
-                        try:
-                            search_api_data = await response.json()
-                            api_captured = True
-                            print(f"✓ Intercepted search API response")
-                        except Exception as e:
-                            print(f"✗ Failed to parse API response: {e}")
+                        api_response = response
 
             page.on('response', handle_response)
 
             # Visit search page to trigger API call
             await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
 
-            # Wait for API to be captured (max 5 seconds)
-            for i in range(50):  # 50 * 0.1 = 5 seconds
-                if api_captured:
-                    break
-                await asyncio.sleep(0.1)
+            # Wait a bit for the response to arrive
+            await asyncio.sleep(2)
+
+            # Parse JSON BEFORE closing browser
+            if api_response:
+                try:
+                    search_api_data = await api_response.json()
+                    print(f"✓ Intercepted search API response")
+                except Exception as e:
+                    print(f"✗ Failed to parse API response: {e}")
 
             # Close browser AFTER all async operations complete
             await browser.close()
