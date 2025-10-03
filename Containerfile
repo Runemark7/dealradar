@@ -46,6 +46,14 @@ RUN .venv/bin/python -m playwright install chromium-headless-shell && \
 # Copy application files
 COPY scraper.py app.py main.py ./
 
+# Create non-root user and copy playwright browsers
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /home/appuser/.cache && \
+    cp -r /root/.cache/ms-playwright /home/appuser/.cache/ && \
+    chown -R appuser:appuser /home/appuser /app
+
+USER appuser
+
 # Expose Flask port
 EXPOSE 5000
 
