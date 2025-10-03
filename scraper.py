@@ -48,7 +48,7 @@ async def fetch_search_results(category_id, limit=10):
             page.on('response', handle_response)
 
             # Visit search page to trigger API call
-            await page.goto(search_url, wait_until='networkidle', timeout=30000)
+            await page.goto(search_url, wait_until='networkidle', timeout=60000)
 
             await browser.close()
 
@@ -113,7 +113,7 @@ async def fetch_blocket_api(ad_id):
             page.on('response', handle_response)
 
             # Visit the page - this will trigger the API call
-            await page.goto(url, wait_until='networkidle', timeout=30000)
+            await page.goto(url, wait_until='networkidle', timeout=60000)
 
             await browser.close()
 
