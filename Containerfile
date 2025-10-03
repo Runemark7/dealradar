@@ -38,8 +38,8 @@ RUN uv venv .venv && \
     uv sync --frozen && \
     find /app/.venv -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
-# Install Playwright chromium and remove unnecessary files
-RUN .venv/bin/python -m playwright install chromium && \
+# Install Playwright chromium-headless-shell and remove unnecessary files
+RUN .venv/bin/python -m playwright install chromium-headless-shell && \
     find /root/.cache/ms-playwright -type f -name "*.log" -delete && \
     find /root/.cache/ms-playwright -type f -name "*.dmp" -delete
 
