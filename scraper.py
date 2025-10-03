@@ -48,7 +48,9 @@ async def fetch_search_results(category_id, limit=10):
             page.on('response', handle_response)
 
             # Visit search page to trigger API call
-            await page.goto(search_url, wait_until='networkidle', timeout=60000)
+            await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
+            # Wait for API call to complete
+            await asyncio.sleep(3)
 
             await browser.close()
 
