@@ -72,13 +72,14 @@ async def fetch_search_results(category_id, limit=10):
         return []
 
 
-async def fetch_blocket_api(ad_id):
+async def fetch_blocket_api(ad_id, page=None):
     """
     Fetch listing data directly from Blocket's API using Playwright.
     Intercepts network requests to capture the API call made by the page itself.
 
     Args:
         ad_id: The Blocket ad ID (e.g., "1213746529")
+        page: Optional Playwright page instance to reuse (if None, creates new browser)
 
     Returns:
         Dictionary with listing data or None if failed
@@ -91,13 +92,8 @@ async def fetch_blocket_api(ad_id):
 
         api_response_data = None
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
-            page = await context.new_page()
-
+        # If page provided, reuse it; otherwise create temporary browser
+        if page:
             # Intercept API requests
             async def handle_response(response):
                 nonlocal api_response_data
@@ -115,31 +111,60 @@ async def fetch_blocket_api(ad_id):
             # Visit the page - this will trigger the API call
             await page.goto(url, wait_until='networkidle', timeout=60000)
 
-            await browser.close()
+            # Remove the listener to prevent memory leaks
+            page.remove_listener('response', handle_response)
 
-            if api_response_data and 'data' in api_response_data:
-                listing = api_response_data['data']
+        else:
+            # Fallback: create temporary browser instance
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                context = await browser.new_context(
+                    user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                page = await context.new_page()
 
-                # Extract all relevant fields
-                listing_data = {
-                    "ad_id": listing.get('ad_id'),
-                    "title": listing.get('subject'),
-                    "description": listing.get('body'),
-                    "price": f"{listing.get('price', {}).get('value')} kr" if listing.get('price') else None,
-                    "location": listing.get('location', {}).get('name') if isinstance(listing.get('location'), dict) else None,
-                    "category": listing.get('category', {}).get('name') if isinstance(listing.get('category'), dict) else None,
-                    "images": [img.get('url') for img in listing.get('images', [])] if listing.get('images') else [],
-                    "seller": listing.get('advertiser', {}).get('name') if isinstance(listing.get('advertiser'), dict) else None,
-                    "company_ad": listing.get('company_ad', False),
-                    "type": listing.get('type'),
-                    "region": listing.get('location', {}).get('region', {}).get('name') if isinstance(listing.get('location'), dict) else None,
-                }
+                # Intercept API requests
+                async def handle_response(response):
+                    nonlocal api_response_data
+                    if 'api.blocket.se' in response.url and ad_id in response.url and response.status == 200:
+                        # Only capture the main content API, not related_content
+                        if '/search_bff/v2/content/' in response.url and 'related_content' not in response.url:
+                            try:
+                                api_response_data = await response.json()
+                                print(f"✓ Intercepted API response")
+                            except:
+                                pass
 
-                print("✓ API data fetched successfully\n")
-                return listing_data
-            else:
-                print("ERROR: Could not intercept API response")
-                return None
+                page.on('response', handle_response)
+
+                # Visit the page - this will trigger the API call
+                await page.goto(url, wait_until='networkidle', timeout=60000)
+
+                await browser.close()
+
+        if api_response_data and 'data' in api_response_data:
+            listing = api_response_data['data']
+
+            # Extract all relevant fields
+            listing_data = {
+                "ad_id": listing.get('ad_id'),
+                "title": listing.get('subject'),
+                "description": listing.get('body'),
+                "price": f"{listing.get('price', {}).get('value')} kr" if listing.get('price') else None,
+                "location": listing.get('location', {}).get('name') if isinstance(listing.get('location'), dict) else None,
+                "category": listing.get('category', {}).get('name') if isinstance(listing.get('category'), dict) else None,
+                "images": [img.get('url') for img in listing.get('images', [])] if listing.get('images') else [],
+                "seller": listing.get('advertiser', {}).get('name') if isinstance(listing.get('advertiser'), dict) else None,
+                "company_ad": listing.get('company_ad', False),
+                "type": listing.get('type'),
+                "region": listing.get('location', {}).get('region', {}).get('name') if isinstance(listing.get('location'), dict) else None,
+            }
+
+            print("✓ API data fetched successfully\n")
+            return listing_data
+        else:
+            print("ERROR: Could not intercept API response")
+            return None
 
     except Exception as e:
         print(f"ERROR: Failed to fetch from API: {e}")
@@ -148,39 +173,56 @@ async def fetch_blocket_api(ad_id):
 
 async def fetch_multiple_listings(ad_ids, batch_size=3):
     """
-    Fetch multiple listings in batches to avoid rate limiting.
+    Fetch multiple listings in batches using a single shared browser instance.
+    Much more memory efficient than creating separate browsers for each listing.
 
     Args:
         ad_ids: List of ad IDs to fetch
-        batch_size: Number of parallel requests per batch (default 3)
+        batch_size: Number of parallel pages per batch (default 3)
 
     Returns:
         List of listing data dictionaries
     """
     all_listings = []
 
-    print(f"\n[BATCH] Fetching {len(ad_ids)} listings in batches of {batch_size}...")
+    print(f"\n[BATCH] Fetching {len(ad_ids)} listings using shared browser...")
 
-    # Process in batches
-    for i in range(0, len(ad_ids), batch_size):
-        batch = ad_ids[i:i + batch_size]
-        batch_num = (i // batch_size) + 1
-        total_batches = (len(ad_ids) + batch_size - 1) // batch_size
+    async with async_playwright() as p:
+        # Launch ONE browser for all requests
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
 
-        print(f"\n[BATCH {batch_num}/{total_batches}] Fetching {len(batch)} listings...")
+        # Process in batches
+        for i in range(0, len(ad_ids), batch_size):
+            batch = ad_ids[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(ad_ids) + batch_size - 1) // batch_size
 
-        # Fetch batch in parallel
-        tasks = [fetch_blocket_api(ad_id) for ad_id in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            print(f"\n[BATCH {batch_num}/{total_batches}] Fetching {len(batch)} listings...")
 
-        # Filter out None results and exceptions
-        for result in results:
-            if result and not isinstance(result, Exception):
-                all_listings.append(result)
+            # Create separate pages for parallel requests within this batch
+            pages = [await context.new_page() for _ in batch]
 
-        # Small delay between batches to be nice to the server
-        if i + batch_size < len(ad_ids):
-            await asyncio.sleep(1)
+            # Fetch batch in parallel using the shared browser
+            tasks = [fetch_blocket_api(ad_id, page) for ad_id, page in zip(batch, pages)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Close pages to free memory
+            for page in pages:
+                await page.close()
+
+            # Filter out None results and exceptions
+            for result in results:
+                if result and not isinstance(result, Exception):
+                    all_listings.append(result)
+
+            # Small delay between batches to be nice to the server
+            if i + batch_size < len(ad_ids):
+                await asyncio.sleep(1)
+
+        await browser.close()
 
     print(f"\n✓ Successfully fetched {len(all_listings)}/{len(ad_ids)} listings")
     return all_listings
