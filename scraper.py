@@ -1,17 +1,64 @@
 """
 Blocket scraper module
 Contains all scraping logic for fetching Blocket listings
+Uses direct HTTP API calls instead of browser automation
 """
 import asyncio
 import json
-import re
+import httpx
 from datetime import datetime
-from playwright.async_api import async_playwright
+
+# Blocket API constants
+SITE_URL = "https://www.blocket.se"
+API_URL = "https://api.blocket.se"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+
+# Global token cache
+_auth_token = None
+
+
+async def get_auth_token():
+    """
+    Get authentication token from Blocket's public endpoint.
+    Token is cached for reuse.
+
+    Returns:
+        str: Bearer token for API authentication
+    """
+    global _auth_token
+
+    if _auth_token:
+        return _auth_token
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SITE_URL}/api/adout-api-route/refresh-token-and-validate-session",
+                headers={"User-Agent": USER_AGENT},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                _auth_token = data.get('bearerToken')
+                if _auth_token:
+                    print(f"✓ Retrieved authentication token")
+                    return _auth_token
+                else:
+                    print(f"ERROR: Token not found in response. Response data: {data}")
+                    return None
+            else:
+                print(f"ERROR: Failed to get token (HTTP {response.status_code})")
+                return None
+
+    except Exception as e:
+        print(f"ERROR: Failed to fetch auth token: {e}")
+        return None
 
 
 async def fetch_search_results(category_id, limit=10):
     """
-    Fetch search results from Blocket and extract ad IDs sorted by newest first.
+    Fetch search results from Blocket API directly using HTTP requests.
 
     Args:
         category_id: Blocket category ID (e.g., "5021")
@@ -23,65 +70,40 @@ async def fetch_search_results(category_id, limit=10):
     try:
         print(f"[SEARCH] Fetching listings from category {category_id}...")
 
-        search_url = f"https://www.blocket.se/annonser/hela_sverige/datorer?cg={category_id}"
-        search_api_data = None
-        api_captured = False
+        # Get auth token first
+        token = await get_auth_token()
+        if not token:
+            print("ERROR: Could not get authentication token")
+            return []
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        # Build API request
+        api_url = f"{API_URL}/search_bff/v2/content"
+        params = {
+            "cg": category_id,
+            "lim": min(max(limit, 50), 99),  # API max is 99
+            "status": "active"
+        }
+
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                api_url,
+                params=params,
+                headers=headers,
+                timeout=30.0
             )
-            page = await context.new_page()
 
-            # Store response object to parse after navigation
-            api_response = None
-            all_responses = []
+            if response.status_code != 200:
+                print(f"ERROR: API returned status {response.status_code}")
+                print(f"Response: {response.text[:500]}")
+                return []
 
-            # Intercept search API requests
-            async def handle_response(response):
-                nonlocal api_response
-                # Log ALL api.blocket.se responses for debugging
-                if 'api.blocket.se' in response.url:
-                    all_responses.append(f"{response.url} [{response.status}]")
-
-                if 'api.blocket.se/search_bff/v2/content' in response.url and response.status == 200:
-                    print(f"[DEBUG] Found API response: {response.url}")
-                    # Make sure it's the search endpoint, not individual content
-                    if 'cg=' in response.url and '/content?' in response.url:
-                        print(f"[DEBUG] Matched search criteria, storing response")
-                        api_response = response
-                    else:
-                        print(f"[DEBUG] Doesn't match search criteria (cg={('cg=' in response.url)}, content={('/content?' in response.url)})")
-
-            page.on('response', handle_response)
-
-            # Visit search page to trigger API call
-            # Use networkidle to wait for all network activity including search API
-            try:
-                await page.goto(search_url, wait_until='networkidle', timeout=45000)
-            except Exception as e:
-                print(f"[DEBUG] Page load warning: {e}")
-                # Continue anyway, maybe some resources timed out but search API worked
-
-            # Give a bit more time for late API calls
-            await asyncio.sleep(2)
-
-            # Parse JSON BEFORE closing browser
-            if api_response:
-                try:
-                    search_api_data = await api_response.json()
-                    print(f"✓ Intercepted search API response")
-                except Exception as e:
-                    print(f"✗ Failed to parse API response: {e}")
-            else:
-                print(f"[DEBUG] No API response captured")
-                print(f"[DEBUG] All API responses seen ({len(all_responses)}):")
-                for r in all_responses:
-                    print(f"  - {r}")
-
-            # Close browser AFTER all async operations complete
-            await browser.close()
+            search_api_data = response.json()
 
             if search_api_data and 'data' in search_api_data:
                 ads = search_api_data['data']
@@ -105,14 +127,12 @@ async def fetch_search_results(category_id, limit=10):
         return []
 
 
-async def fetch_blocket_api(ad_id, page=None):
+async def fetch_blocket_api(ad_id):
     """
-    Fetch listing data directly from Blocket's API using Playwright.
-    Intercepts network requests to capture the API call made by the page itself.
+    Fetch listing data directly from Blocket's API using HTTP requests.
 
     Args:
         ad_id: The Blocket ad ID (e.g., "1213746529")
-        page: Optional Playwright page instance to reuse (if None, creates new browser)
 
     Returns:
         Dictionary with listing data or None if failed
@@ -120,97 +140,57 @@ async def fetch_blocket_api(ad_id, page=None):
     try:
         print(f"[API].... Fetching from Blocket API for ad {ad_id}...")
 
-        # We need to visit a Blocket page to trigger the API call
-        url = f"https://www.blocket.se/annons/{ad_id}"
-
-        api_response_data = None
-
-        # If page provided, reuse it; otherwise create temporary browser
-        if page:
-            api_response = None
-
-            # Intercept API requests
-            async def handle_response(response):
-                nonlocal api_response
-                if 'api.blocket.se' in response.url and ad_id in response.url and response.status == 200:
-                    # Only capture the main content API, not related_content
-                    if '/search_bff/v2/content/' in response.url and 'related_content' not in response.url:
-                        api_response = response
-
-            page.on('response', handle_response)
-
-            try:
-                # Visit the page - this will trigger the API call
-                await page.goto(url, wait_until='networkidle', timeout=30000)
-
-                # Parse JSON BEFORE removing listener
-                if api_response:
-                    try:
-                        api_response_data = await api_response.json()
-                        print(f"✓ Intercepted API response")
-                    except Exception as e:
-                        print(f"✗ JSON parse failed: {e}")
-            finally:
-                # Always remove the listener, even if navigation fails
-                page.remove_listener('response', handle_response)
-
-        else:
-            # Fallback: create temporary browser instance
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                context = await browser.new_context(
-                    user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                )
-                page = await context.new_page()
-
-                api_response = None
-
-                # Intercept API requests
-                async def handle_response(response):
-                    nonlocal api_response
-                    if 'api.blocket.se' in response.url and ad_id in response.url and response.status == 200:
-                        # Only capture the main content API, not related_content
-                        if '/search_bff/v2/content/' in response.url and 'related_content' not in response.url:
-                            api_response = response
-
-                page.on('response', handle_response)
-
-                # Visit the page - this will trigger the API call
-                await page.goto(url, wait_until='networkidle', timeout=30000)
-
-                # Parse JSON BEFORE closing browser
-                if api_response:
-                    try:
-                        api_response_data = await api_response.json()
-                        print(f"✓ Intercepted API response")
-                    except Exception as e:
-                        print(f"✗ JSON parse failed: {e}")
-
-                await browser.close()
-
-        if api_response_data and 'data' in api_response_data:
-            listing = api_response_data['data']
-
-            # Extract all relevant fields
-            listing_data = {
-                "ad_id": listing.get('ad_id'),
-                "title": listing.get('subject'),
-                "description": listing.get('body'),
-                "price": f"{listing.get('price', {}).get('value')} kr" if listing.get('price') else None,
-                "location": listing.get('location', {}).get('name') if isinstance(listing.get('location'), dict) else None,
-                "category": listing.get('category', {}).get('name') if isinstance(listing.get('category'), dict) else None,
-                "images": [img.get('url') for img in listing.get('images', [])] if listing.get('images') else [],
-                "seller": listing.get('advertiser', {}).get('name') if isinstance(listing.get('advertiser'), dict) else None,
-                "company_ad": listing.get('company_ad', False),
-                "type": listing.get('type'),
-                "region": listing.get('location', {}).get('region', {}).get('name') if isinstance(listing.get('location'), dict) else None,
-            }
-
-            print("✓ API data fetched successfully\n")
-            return listing_data
-        else:
-            print("ERROR: Could not intercept API response")
+        # Get auth token first
+        token = await get_auth_token()
+        if not token:
+            print("ERROR: Could not get authentication token")
             return None
+
+        # Build API request for single listing
+        api_url = f"{API_URL}/search_bff/v2/content/{ad_id}"
+
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                api_url,
+                headers=headers,
+                timeout=30.0
+            )
+
+            if response.status_code != 200:
+                print(f"ERROR: API returned status {response.status_code}")
+                return None
+
+            api_response_data = response.json()
+
+            if api_response_data and 'data' in api_response_data:
+                listing = api_response_data['data']
+
+                # Extract all relevant fields
+                listing_data = {
+                    "ad_id": listing.get('ad_id'),
+                    "title": listing.get('subject'),
+                    "description": listing.get('body'),
+                    "price": f"{listing.get('price', {}).get('value')} kr" if listing.get('price') else None,
+                    "location": listing.get('location', {}).get('name') if isinstance(listing.get('location'), dict) else None,
+                    "category": listing.get('category', {}).get('name') if isinstance(listing.get('category'), dict) else None,
+                    "images": [img.get('url') for img in listing.get('images', [])] if listing.get('images') else [],
+                    "seller": listing.get('advertiser', {}).get('name') if isinstance(listing.get('advertiser'), dict) else None,
+                    "company_ad": listing.get('company_ad', False),
+                    "type": listing.get('type'),
+                    "region": listing.get('location', {}).get('region', {}).get('name') if isinstance(listing.get('location'), dict) else None,
+                }
+
+                print("✓ API data fetched successfully\n")
+                return listing_data
+            else:
+                print("ERROR: Could not fetch API response")
+                return None
 
     except Exception as e:
         import traceback
@@ -219,58 +199,48 @@ async def fetch_blocket_api(ad_id, page=None):
         return None
 
 
-async def fetch_multiple_listings(ad_ids, batch_size=3):
+async def fetch_multiple_listings(ad_ids, batch_size=10):
     """
-    Fetch multiple listings in batches using a single shared browser instance.
-    Much more memory efficient than creating separate browsers for each listing.
+    Fetch multiple listings in parallel using HTTP requests.
+    Much faster than browser automation.
 
     Args:
         ad_ids: List of ad IDs to fetch
-        batch_size: Number of parallel pages per batch (default 3)
+        batch_size: Number of parallel requests per batch (default 10)
 
     Returns:
         List of listing data dictionaries
     """
     all_listings = []
 
-    print(f"\n[BATCH] Fetching {len(ad_ids)} listings using shared browser...")
+    print(f"\n[BATCH] Fetching {len(ad_ids)} listings using HTTP API...")
 
-    async with async_playwright() as p:
-        # Launch ONE browser for all requests
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        )
+    # Get auth token once for all requests
+    token = await get_auth_token()
+    if not token:
+        print("ERROR: Could not get authentication token")
+        return []
 
-        # Process in batches
-        for i in range(0, len(ad_ids), batch_size):
-            batch = ad_ids[i:i + batch_size]
-            batch_num = (i // batch_size) + 1
-            total_batches = (len(ad_ids) + batch_size - 1) // batch_size
+    # Process in batches
+    for i in range(0, len(ad_ids), batch_size):
+        batch = ad_ids[i:i + batch_size]
+        batch_num = (i // batch_size) + 1
+        total_batches = (len(ad_ids) + batch_size - 1) // batch_size
 
-            print(f"\n[BATCH {batch_num}/{total_batches}] Fetching {len(batch)} listings...")
+        print(f"\n[BATCH {batch_num}/{total_batches}] Fetching {len(batch)} listings...")
 
-            # Create separate pages for parallel requests within this batch
-            pages = [await context.new_page() for _ in batch]
+        # Fetch batch in parallel
+        tasks = [fetch_blocket_api(ad_id) for ad_id in batch]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Fetch batch in parallel using the shared browser
-            tasks = [fetch_blocket_api(ad_id, page) for ad_id, page in zip(batch, pages)]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Filter out None results and exceptions
+        for result in results:
+            if result and not isinstance(result, Exception):
+                all_listings.append(result)
 
-            # Close pages to free memory
-            for page in pages:
-                await page.close()
-
-            # Filter out None results and exceptions
-            for result in results:
-                if result and not isinstance(result, Exception):
-                    all_listings.append(result)
-
-            # Small delay between batches to be nice to the server
-            if i + batch_size < len(ad_ids):
-                await asyncio.sleep(1)
-
-        await browser.close()
+        # Small delay between batches to be nice to the server
+        if i + batch_size < len(ad_ids):
+            await asyncio.sleep(0.5)
 
     print(f"\n✓ Successfully fetched {len(all_listings)}/{len(ad_ids)} listings")
     return all_listings
