@@ -1,0 +1,3 @@
+"""
+DealRadar test suite
+"""

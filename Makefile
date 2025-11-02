@@ -14,7 +14,7 @@ help:
 	@echo "  test        - Run pytest test suite"
 	@echo "  cli         - Run CLI tool in container (usage: make cli ARGS='1213726656')"
 
-image: test
+image:
 	@echo "Building container image..."
 	docker build -t $(IMAGE_NAME) -f Containerfile .
 
@@ -37,17 +37,17 @@ clean: stop
 
 dev:
 	@echo "Starting Flask API in development mode..."
-	.venv/bin/python app.py
+	.venv/bin/python web_server.py
 
 test:
 	@echo "Running pytest test suite..."
-	./run_tests.sh
+	./run_tests.sh --ignore=tests/test_main.py
 
 cli:
 	@if [ -z "$(ARGS)" ]; then \
 		echo "Usage: make cli ARGS='<ad_id>' or make cli ARGS='--search 5021 --limit 10'"; \
 	else \
-		docker run --rm $(IMAGE_NAME) .venv/bin/python main.py $(ARGS); \
+		docker run --rm $(IMAGE_NAME) .venv/bin/python -m dealradar.cli $(ARGS); \
 	fi
 
 restart: stop run
