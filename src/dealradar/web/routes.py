@@ -5,7 +5,7 @@ Defines all HTTP endpoints for the web service
 import asyncio
 from flask import jsonify, request
 
-from ..api import fetch_blocket_api, fetch_search_results, fetch_multiple_listings
+from ..api import fetch_blocket_api, fetch_search_results, fetch_multiple_listings, fetch_recent_search_results
 from ..config import settings
 
 
@@ -34,6 +34,17 @@ def register_routes(app):
                         "limit": "Number of listings to return (default: 10)"
                     },
                     "example": "/api/search?category=5021&limit=10"
+                },
+                "recent_search": {
+                    "path": "/api/search/recent",
+                    "method": "GET",
+                    "description": "Search for recent listings by category and time window",
+                    "parameters": {
+                        "category": "Category ID (required)",
+                        "hours": "Maximum age of listings in hours (default: 1, max: 168)",
+                        "limit": "Number of listings to return (default: 50, max: 99)"
+                    },
+                    "example": "/api/search/recent?category=5021&hours=1&limit=20"
                 },
                 "health": {
                     "path": "/health",
@@ -122,6 +133,80 @@ def register_routes(app):
                 "data": {
                     "total_fetched": len(listings),
                     "category": category_id,
+                    "requested_limit": limit,
+                    "listings": listings
+                }
+            }), 200
+
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
+
+    @app.route('/api/search/recent', methods=['GET'])
+    def search_recent_listings():
+        """
+        Search for recent listings by category and time window
+
+        Query Parameters:
+            category: Category ID (required)
+            hours: Maximum age of listings in hours (default: 1)
+            limit: Number of listings to return (default: 50)
+
+        Returns:
+            JSON response with recent listings
+        """
+        try:
+            # Get query parameters
+            category_id = request.args.get('category')
+            hours = request.args.get('hours', default=1, type=int)
+            limit = request.args.get('limit', default=50, type=int)
+
+            if not category_id:
+                return jsonify({
+                    "success": False,
+                    "error": "Missing required parameter: category"
+                }), 400
+
+            # Validate hours
+            if hours < 1 or hours > 168:  # Max 1 week
+                return jsonify({
+                    "success": False,
+                    "error": "Hours must be between 1 and 168 (1 week)"
+                }), 400
+
+            # Validate limit
+            if limit < 1 or limit > 99:
+                return jsonify({
+                    "success": False,
+                    "error": "Limit must be between 1 and 99"
+                }), 400
+
+            # Run async function to get recent ad IDs
+            ad_ids = asyncio.run(fetch_recent_search_results(category_id, hours, limit))
+
+            if not ad_ids:
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "total_fetched": 0,
+                        "category": category_id,
+                        "max_age_hours": hours,
+                        "requested_limit": limit,
+                        "listings": []
+                    }
+                }), 200
+
+            # Fetch full details for all listings
+            listings = asyncio.run(fetch_multiple_listings(ad_ids))
+
+            return jsonify({
+                "success": True,
+                "data": {
+                    "total_fetched": len(listings),
+                    "category": category_id,
+                    "max_age_hours": hours,
                     "requested_limit": limit,
                     "listings": listings
                 }
