@@ -5,6 +5,9 @@ build/
 dist/
 wheels/
 *.egg-info
+CLAUDE.md
 
 # Virtual environments
 .venv
+.pytest_cache
+.claude

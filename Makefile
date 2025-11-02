@@ -1,21 +1,20 @@
-.PHONY: build run stop logs clean dev test help
-
+.PHONY: image run stop logs clean dev test help
 IMAGE_NAME := blocket-scraper
 CONTAINER_NAME := blocket-scraper-api
 PORT := 5000
 
 help:
 	@echo "Available targets:"
-	@echo "  build       - Build the container image"
+	@echo "  image       - Build the image (runs tests first)"
 	@echo "  run         - Run the API container"
 	@echo "  stop        - Stop the running container"
 	@echo "  logs        - View container logs"
 	@echo "  clean       - Remove container and image"
 	@echo "  dev         - Run Flask API locally (dev mode)"
-	@echo "  test        - Run test commands"
+	@echo "  test        - Run pytest test suite"
 	@echo "  cli         - Run CLI tool in container (usage: make cli ARGS='1213726656')"
 
-build:
+image: test
 	@echo "Building container image..."
 	docker build -t $(IMAGE_NAME) -f Containerfile .
 
@@ -41,11 +40,8 @@ dev:
 	.venv/bin/python app.py
 
 test:
-	@echo "Testing single listing fetch..."
-	.venv/bin/python main.py 1213726656
-	@echo ""
-	@echo "Testing category search..."
-	.venv/bin/python main.py --search 5021 --limit 2
+	@echo "Running pytest test suite..."
+	./run_tests.sh
 
 cli:
 	@if [ -z "$(ARGS)" ]; then \
