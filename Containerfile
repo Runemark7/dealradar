@@ -31,5 +31,5 @@ EXPOSE 5000
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 
-# Run Flask app by default
-CMD [".venv/bin/python", "web_server.py"]
+# Run Flask app with gunicorn production server
+CMD [".venv/bin/gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "120", "dealradar.web.app:create_app()"]
