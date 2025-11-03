@@ -12,17 +12,26 @@ from ..config import settings
 _auth_token: Optional[str] = None
 
 
-async def get_auth_token() -> Optional[str]:
+def clear_auth_token():
+    """Clear the cached authentication token (useful when token expires)"""
+    global _auth_token
+    _auth_token = None
+
+
+async def get_auth_token(force_refresh: bool = False) -> Optional[str]:
     """
     Get authentication token from Blocket's public endpoint.
     Token is cached for reuse.
+
+    Args:
+        force_refresh: If True, fetch a new token even if cached
 
     Returns:
         Bearer token for API authentication, or None if failed
     """
     global _auth_token
 
-    if _auth_token:
+    if _auth_token and not force_refresh:
         return _auth_token
 
     try:
@@ -37,7 +46,7 @@ async def get_auth_token() -> Optional[str]:
                 data = response.json()
                 _auth_token = data.get('bearerToken')
                 if _auth_token:
-                    print(f"✓ Retrieved authentication token")
+                    print(f"✓ Retrieved {'fresh' if force_refresh else 'new'} authentication token")
                     return _auth_token
                 else:
                     print(f"ERROR: Token not found in response. Response data: {data}")

@@ -12,4 +12,4 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from dealradar.web.app import run_server
 
 if __name__ == "__main__":
-    run_server(debug=True, host='0.0.0.0', port=5000)
+    run_server(debug=True, host='0.0.0.0', port=5001)

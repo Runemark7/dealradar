@@ -1,7 +1,7 @@
 .PHONY: image run stop logs clean dev test help
 IMAGE_NAME := blocket-scraper
 CONTAINER_NAME := blocket-scraper-api
-PORT := 5000
+PORT := 5001
 
 help:
 	@echo "Available targets:"
@@ -20,7 +20,7 @@ image:
 
 run:
 	@echo "Starting API container on port $(PORT)..."
-	docker run -d --name $(CONTAINER_NAME) -p $(PORT):5000 $(IMAGE_NAME)
+	docker run -d --name $(CONTAINER_NAME) -p $(PORT):5001 $(IMAGE_NAME)
 	@echo "API running at http://localhost:$(PORT)"
 
 stop:
