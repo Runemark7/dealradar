@@ -23,8 +23,11 @@ CREATE TABLE IF NOT EXISTS evaluations (
     id SERIAL PRIMARY KEY,
     ad_id VARCHAR(50) REFERENCES posts(ad_id) ON DELETE CASCADE,
     status VARCHAR(20) DEFAULT 'pending',  -- pending, completed, error, skipped
-    value_score INTEGER CHECK (value_score BETWEEN 1 AND 10),
-    evaluation_notes TEXT,
+    value_score NUMERIC(3,1) CHECK (value_score BETWEEN 1 AND 10),
+    evaluation_notes TEXT,  -- Main justification from AI
+    notification_message TEXT,  -- Short message for notifications
+    estimated_market_value VARCHAR(100),  -- AI's market value estimate
+    specs JSONB,  -- Parsed specs from AI
     evaluated_at TIMESTAMP,
     error_message TEXT,
     CONSTRAINT unique_evaluation_per_post UNIQUE(ad_id)
