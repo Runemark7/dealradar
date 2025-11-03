@@ -35,6 +35,20 @@ spec:
         - name: http
           containerPort: {{ .Values.service.targetPort }}
           protocol: TCP
+        env:
+        - name: DB_HOST
+          value: "blocket-postgres-postgresql.postgres.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "dealradar"
+        - name: DB_USER
+          value: "dealradar"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blocket-postgres-postgresql
+              key: password
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
