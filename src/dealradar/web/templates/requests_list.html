@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Deal Requests - DealRadar{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="color: white; margin: 0;">🎯 Active Deal Requests</h2>
+        <a href="/requests/new" style="
+            background: white;
+            color: #667eea;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.3s;">
+            + Create New Request
+        </a>
+    </div>
+    <p style="color: rgba(255,255,255,0.9); font-size: 1.1em;">
+        Browse active deal requests or create your own. Get notified when perfect matches are found!
+    </p>
+</div>
+
+<div id="requests-container" style="display: grid; gap: 20px;">
+    {% if requests %}
+        {% for request in requests %}
+        <div class="request-card" style="
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;"
+            onclick="window.location.href='/requests/{{ request.id }}'">
+
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 1.4em;">{{ request.title }}</h3>
+                    <p style="color: #666; margin: 0; line-height: 1.5;">{{ request.description[:150] }}{% if request.description|length > 150 %}...{% endif %}</p>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 20px;">
+                    {% if request.status == 'active' %}
+                    <span style="background: #10B981; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85em; font-weight: 600; text-align: center;">
+                        Active
+                    </span>
+                    {% elif request.status == 'fulfilled' %}
+                    <span style="background: #667eea; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85em; font-weight: 600; text-align: center;">
+                        Fulfilled
+                    </span>
+                    {% elif request.status == 'expired' %}
+                    <span style="background: #6B7280; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85em; font-weight: 600; text-align: center;">
+                        Expired
+                    </span>
+                    {% else %}
+                    <span style="background: #F59E0B; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85em; font-weight: 600; text-align: center;">
+                        Pending
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                <div>
+                    <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Budget</div>
+                    <div style="color: #333; font-weight: 600; font-size: 1.1em;">
+                        {% if request.max_budget %}
+                            {{ request.max_budget }} kr
+                        {% else %}
+                            No limit
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Subscribers</div>
+                    <div style="color: #333; font-weight: 600; font-size: 1.1em;">
+                        {{ request.subscriber_count or 0 }} 👥
+                    </div>
+                </div>
+
+                <div>
+                    <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Matches Found</div>
+                    <div style="color: #333; font-weight: 600; font-size: 1.1em;">
+                        {{ request.match_count or 0 }}
+                        {% if request.best_match_score %}
+                            <span style="color: #667eea;">(⭐ {{ request.best_match_score }})</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Expires</div>
+                    <div style="color: #333; font-weight: 600; font-size: 1.1em;">
+                        {{ request.expires_at.strftime('%Y-%m-%d') if request.expires_at else 'N/A' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="background: white; border-radius: 12px; padding: 60px 20px; text-align: center;">
+            <h2 style="color: #333; margin-bottom: 10px;">No Active Requests</h2>
+            <p style="color: #666; margin-bottom: 20px;">Be the first to create a deal request!</p>
+            <a href="/requests/new" style="
+                background: #667eea;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: 600;
+                display: inline-block;">
+                Create First Request
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .request-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+    }
+</style>
+{% endblock %}

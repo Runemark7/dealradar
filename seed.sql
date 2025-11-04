@@ -104,6 +104,50 @@ VALUES
      '{"Brand": "Logitech", "Model": "MX Master 3", "Type": "Trådlös"}'::jsonb,
      NOW());
 
+-- Insert sample deal requests
+INSERT INTO deal_requests (title, description, category, max_budget, requirements, status, approved, structured_prompt)
+VALUES
+    ('Hybrid Golf Club - 3 Hybrid',
+     'Looking for a hybrid golf club for my bag. Need stiff flex, at least a 3 hybrid (loft 18-20 degrees), max 1500 kr, located in Gothenburg.',
+     '5090',  -- Sports & Outdoors category
+     1500,
+     'Stiff flex, 3 hybrid or better, loft 18-20 degrees, located in Gothenburg',
+     'active',
+     true,
+     'You are evaluating a golf club listing. The buyer is looking for:
+- Flex: Must be STIFF flex (reject if not stiff)
+- Club type: 3 hybrid or better (2 hybrid, 1 hybrid also acceptable)
+- Loft: Between 18-20 degrees
+- Budget: Maximum 1500 kr
+- Location: Must be in or near Gothenburg
+- Quality: Should be in good condition, no major damage
+
+Score 9-10 only if ALL requirements are met and price is excellent for the condition.'),
+
+    ('Gaming Monitor Under 3000',
+     'Want a good gaming monitor, at least 144Hz, 1440p or better, under 3000 kr. Location Stockholm area.',
+     '5020',  -- Computer Accessories
+     3000,
+     '144Hz or higher, 1440p resolution minimum, 27 inch preferred, Stockholm area',
+     'active',
+     true,
+     'You are evaluating a gaming monitor listing. The buyer is looking for:
+- Refresh Rate: Must be 144Hz or higher
+- Resolution: 1440p minimum (2560x1440 or better)
+- Size: Preferably 27 inch or larger
+- Budget: Maximum 3000 kr
+- Location: Stockholm area
+- Condition: Should work perfectly, no dead pixels
+
+Score 9-10 only if it meets refresh rate and resolution requirements, good price, and excellent condition.');
+
+-- Insert sample subscriptions
+INSERT INTO request_subscriptions (request_id, email)
+VALUES
+    (1, 'golf.enthusiast@example.com'),
+    (1, 'test.user@example.com'),
+    (2, 'gamer123@example.com');
+
 -- Show summary
 SELECT
     COUNT(*) as total_posts,

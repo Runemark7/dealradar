@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% from "components/deal_card.html" import render_deal_card %}
+
+{% block title %}{{ request.title }} - DealRadar{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="/requests" style="color: white; text-decoration: none; font-size: 0.9em;">← Back to All Requests</a>
+</div>
+
+<div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+        <div>
+            <h1 style="margin: 0 0 15px 0; color: #333;">{{ request.title }}</h1>
+            {% if request.status == 'active' %}
+            <span style="background: #10B981; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.9em; font-weight: 600;">
+                🟢 Active
+            </span>
+            {% elif request.status == 'fulfilled' %}
+            <span style="background: #667eea; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.9em; font-weight: 600;">
+                ✅ Fulfilled
+            </span>
+            {% elif request.status == 'expired' %}
+            <span style="background: #6B7280; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.9em; font-weight: 600;">
+                ⏱️ Expired
+            </span>
+            {% else %}
+            <span style="background: #F59E0B; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.9em; font-weight: 600;">
+                ⏳ Pending Approval
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="margin-bottom: 25px;">
+        <h3 style="color: #333; margin-bottom: 10px;">Description</h3>
+        <p style="color: #666; line-height: 1.6;">{{ request.description }}</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; padding: 20px; background: #F9FAFB; border-radius: 8px;">
+        <div>
+            <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Budget</div>
+            <div style="color: #333; font-weight: 600; font-size: 1.2em;">
+                {% if request.max_budget %}
+                    {{ request.max_budget }} kr
+                {% else %}
+                    No limit
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Category</div>
+            <div style="color: #333; font-weight: 600; font-size: 1.2em;">{{ request.category }}</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Subscribers</div>
+            <div style="color: #333; font-weight: 600; font-size: 1.2em;">{{ subscriptions|length }} 👥</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Expires</div>
+            <div style="color: #333; font-weight: 600; font-size: 1.2em;">
+                {{ request.expires_at.strftime('%Y-%m-%d') if request.expires_at else 'N/A' }}
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-bottom: 25px;">
+        <h3 style="color: #333; margin-bottom: 10px;">Requirements</h3>
+        <p style="color: #666; white-space: pre-line; line-height: 1.6;">{{ request.requirements }}</p>
+    </div>
+
+    {% if request.status == 'active' %}
+    <div style="background: #EFF6FF; border: 1px solid #93C5FD; border-radius: 8px; padding: 20px;">
+        <h3 style="color: #1E40AF; margin-top: 0;">📬 Get Notified</h3>
+        <p style="color: #1E3A8A; margin-bottom: 15px;">Enter your email to be notified when we find a perfect match!</p>
+
+        <form hx-post="/api/requests/{{ request.id }}/subscribe" hx-target="#subscribe-message" hx-indicator="#subscribe-loading">
+            <div style="display: flex; gap: 10px;">
+                <input
+                    type="email"
+                    name="email"
+                    required
+                    placeholder="your.email@example.com"
+                    style="flex: 1; padding: 12px; border: 2px solid #93C5FD; border-radius: 8px; font-size: 15px;">
+                <button
+                    type="submit"
+                    style="padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: background 0.3s;">
+                    <span id="subscribe-loading" class="htmx-indicator" style="display: none;">...</span>
+                    Subscribe
+                </button>
+            </div>
+        </form>
+        <div id="subscribe-message" style="margin-top: 10px;"></div>
+    </div>
+    {% endif %}
+</div>
+
+{% if matches %}
+<div style="margin-bottom: 20px;">
+    <h2 style="color: white; margin-bottom: 15px;">
+        🎯 Found Matches ({{ matches|length }})
+    </h2>
+    <p style="color: rgba(255,255,255,0.9); margin-bottom: 20px;">
+        Here are the deals that match your requirements:
+    </p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px;">
+    {% for match in matches %}
+        {{ render_deal_card(match) }}
+    {% endfor %}
+</div>
+{% else %}
+<div style="background: white; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h3 style="color: #333; margin-bottom: 10px;">No Matches Yet</h3>
+    <p style="color: #666;">
+        {% if request.status == 'active' %}
+            We're actively searching for deals that match your requirements. You'll be notified when we find something!
+        {% elif request.status == 'pending' %}
+            Your request is pending approval. Once approved, we'll start searching for matches.
+        {% elif request.status == 'expired' %}
+            This request has expired without finding a match.
+        {% else %}
+            This request has been fulfilled.
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+<style>
+    input[type="email"]:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    button:hover {
+        background: #5568d3 !important;
+    }
+</style>
+
+<script>
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        if (event.detail.pathInfo.requestPath.includes('/subscribe')) {
+            const messageDiv = document.getElementById('subscribe-message');
+            if (event.detail.successful) {
+                messageDiv.innerHTML = `
+                    <div style="background: #D1FAE5; border: 1px solid #10B981; border-radius: 6px; padding: 12px; color: #065F46; font-size: 0.9em;">
+                        ✅ Successfully subscribed! You'll be notified when we find a perfect match.
+                    </div>
+                `;
+                event.detail.target.closest('form').reset();
+            } else {
+                messageDiv.innerHTML = `
+                    <div style="background: #FEE2E2; border: 1px solid #EF4444; border-radius: 6px; padding: 12px; color: #991B1B; font-size: 0.9em;">
+                        ❌ ${event.detail.xhr.responseText || 'Failed to subscribe. Please try again.'}
+                    </div>
+                `;
+            }
+        }
+    });
+</script>
+{% endblock %}

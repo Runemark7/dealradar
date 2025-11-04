@@ -74,3 +74,59 @@ WHERE e.value_score >= 8
   AND e.status = 'completed'
   AND n.ad_id IS NULL
 ORDER BY e.value_score DESC;
+
+-- Deal Finder: User requests for specific items
+CREATE TABLE IF NOT EXISTS deal_requests (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    max_budget INTEGER,
+    requirements TEXT,
+    structured_prompt TEXT,
+    status VARCHAR(20) DEFAULT 'pending',  -- pending, active, fulfilled, expired
+    approved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '7 days',
+    fulfilled_at TIMESTAMP
+);
+
+-- Request subscriptions: Email list for each request
+CREATE TABLE IF NOT EXISTS request_subscriptions (
+    id SERIAL PRIMARY KEY,
+    request_id INTEGER REFERENCES deal_requests(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_request_subscription UNIQUE(request_id, email)
+);
+
+-- Request matches: Posts that match specific requests
+CREATE TABLE IF NOT EXISTS request_matches (
+    id SERIAL PRIMARY KEY,
+    request_id INTEGER REFERENCES deal_requests(id) ON DELETE CASCADE,
+    ad_id VARCHAR(50) REFERENCES posts(ad_id) ON DELETE CASCADE,
+    value_score NUMERIC(3,1),
+    matched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_request_match UNIQUE(request_id, ad_id)
+);
+
+-- Indexes for deal finder
+CREATE INDEX IF NOT EXISTS idx_deal_requests_status ON deal_requests(status);
+CREATE INDEX IF NOT EXISTS idx_deal_requests_approved ON deal_requests(approved);
+CREATE INDEX IF NOT EXISTS idx_deal_requests_expires ON deal_requests(expires_at);
+CREATE INDEX IF NOT EXISTS idx_request_matches_score ON request_matches(value_score DESC);
+
+-- View for active requests
+CREATE OR REPLACE VIEW active_requests AS
+SELECT dr.*,
+       COUNT(DISTINCT rs.id) as subscriber_count,
+       COUNT(DISTINCT rm.id) as match_count,
+       MAX(rm.value_score) as best_match_score
+FROM deal_requests dr
+LEFT JOIN request_subscriptions rs ON dr.id = rs.request_id
+LEFT JOIN request_matches rm ON dr.id = rm.request_id
+WHERE dr.approved = true
+  AND dr.status = 'active'
+  AND dr.expires_at > CURRENT_TIMESTAMP
+GROUP BY dr.id
+ORDER BY dr.created_at DESC;

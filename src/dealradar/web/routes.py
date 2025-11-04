@@ -401,3 +401,195 @@ def register_routes(app):
                 keywords=[],
                 error=str(e)
             ), 500
+
+    @app.route('/requests')
+    def requests_list():
+        """List all active deal requests"""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Get all requests with counts
+            query = """
+                SELECT dr.*,
+                       COUNT(DISTINCT rs.id) as subscriber_count,
+                       COUNT(DISTINCT rm.id) as match_count,
+                       MAX(rm.value_score) as best_match_score
+                FROM deal_requests dr
+                LEFT JOIN request_subscriptions rs ON dr.id = rs.request_id
+                LEFT JOIN request_matches rm ON dr.id = rm.request_id
+                GROUP BY dr.id
+                ORDER BY
+                    CASE WHEN dr.status = 'active' THEN 1
+                         WHEN dr.status = 'fulfilled' THEN 2
+                         WHEN dr.status = 'pending' THEN 3
+                         ELSE 4 END,
+                    dr.created_at DESC
+            """
+
+            cursor.execute(query)
+            requests = cursor.fetchall()
+
+            cursor.close()
+            conn.close()
+
+            return render_template('requests_list.html', requests=requests)
+
+        except Exception as e:
+            return f'<div class="no-deals"><h2>Error</h2><p>{str(e)}</p></div>', 500
+
+    @app.route('/requests/new')
+    def request_form():
+        """Show form to create new request"""
+        return render_template('request_form.html')
+
+    @app.route('/requests/<int:request_id>')
+    def request_detail(request_id):
+        """Show details for a specific request"""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Get request details
+            cursor.execute("SELECT * FROM deal_requests WHERE id = %s", (request_id,))
+            request = cursor.fetchone()
+
+            if not request:
+                cursor.close()
+                conn.close()
+                return "Request not found", 404
+
+            # Get subscriptions
+            cursor.execute("SELECT * FROM request_subscriptions WHERE request_id = %s", (request_id,))
+            subscriptions = cursor.fetchall()
+
+            # Get matches with full post details
+            cursor.execute("""
+                SELECT p.*, e.value_score, e.evaluation_notes, e.notification_message,
+                       e.estimated_market_value, e.specs, e.evaluated_at, rm.matched_at
+                FROM request_matches rm
+                INNER JOIN posts p ON rm.ad_id = p.ad_id
+                LEFT JOIN evaluations e ON p.ad_id = e.ad_id
+                WHERE rm.request_id = %s
+                ORDER BY rm.value_score DESC, rm.matched_at DESC
+            """, (request_id,))
+            matches = cursor.fetchall()
+
+            cursor.close()
+            conn.close()
+
+            return render_template(
+                'request_detail.html',
+                request=request,
+                subscriptions=subscriptions,
+                matches=matches
+            )
+
+        except Exception as e:
+            return f'<div class="no-deals"><h2>Error</h2><p>{str(e)}</p></div>', 500
+
+    @app.route('/api/requests', methods=['POST'])
+    def create_request():
+        """API endpoint to create a new deal request"""
+        try:
+            title = request.form.get('title', '').strip()
+            category = request.form.get('category', '').strip()
+            max_budget = request.form.get('max_budget', '').strip()
+            requirements = request.form.get('requirements', '').strip()
+            email = request.form.get('email', '').strip()
+
+            # Validation
+            if not title or not category or not requirements or not email:
+                return "Missing required fields", 400
+
+            if len(title) > 200:
+                return "Title too long (max 200 characters)", 400
+
+            # Validate email format (basic)
+            import re
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+                return "Invalid email format", 400
+
+            # Parse budget
+            budget_int = None
+            if max_budget:
+                try:
+                    budget_int = int(max_budget)
+                    if budget_int < 0:
+                        return "Budget must be positive", 400
+                except ValueError:
+                    return "Invalid budget format", 400
+
+            conn = get_db_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Insert request using parameterized query
+            cursor.execute("""
+                INSERT INTO deal_requests
+                (title, description, category, max_budget, requirements, status)
+                VALUES (%s, %s, %s, %s, %s, 'pending')
+                RETURNING id
+            """, (title, requirements, category, budget_int, requirements))
+
+            request_id = cursor.fetchone()['id']
+
+            # Add creator as first subscriber using parameterized query
+            cursor.execute("""
+                INSERT INTO request_subscriptions (request_id, email)
+                VALUES (%s, %s)
+            """, (request_id, email))
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            return "Success", 200
+
+        except Exception as e:
+            return f"Error: {str(e)}", 500
+
+    @app.route('/api/requests/<int:request_id>/subscribe', methods=['POST'])
+    def subscribe_to_request(request_id):
+        """API endpoint to subscribe to a request"""
+        try:
+            email = request.form.get('email', '').strip()
+
+            # Validation
+            if not email:
+                return "Email is required", 400
+
+            # Validate email format
+            import re
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+                return "Invalid email format", 400
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Check if request exists
+            cursor.execute("SELECT id FROM deal_requests WHERE id = %s", (request_id,))
+            if not cursor.fetchone():
+                cursor.close()
+                conn.close()
+                return "Request not found", 404
+
+            # Insert subscription using parameterized query (will fail if duplicate due to UNIQUE constraint)
+            try:
+                cursor.execute("""
+                    INSERT INTO request_subscriptions (request_id, email)
+                    VALUES (%s, %s)
+                """, (request_id, email))
+                conn.commit()
+            except psycopg2.IntegrityError:
+                conn.rollback()
+                cursor.close()
+                conn.close()
+                return "Already subscribed", 400
+
+            cursor.close()
+            conn.close()
+
+            return "Success", 200
+
+        except Exception as e:
+            return f"Error: {str(e)}", 500

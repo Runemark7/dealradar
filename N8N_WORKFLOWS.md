@@ -375,6 +375,344 @@ Query Parameters:
 
 ---
 
+## Workflow 4: Request Structurer - Parse User Requirements
+
+**Trigger:** Webhook (called from Flask API)
+
+### Workflow Description
+
+1. Receives raw user requirements text
+2. Uses AI to structure the request into organized criteria
+3. Generates specialized evaluation prompt
+4. Updates database with structured prompt
+
+### Nodes Configuration
+
+#### Node 1: Webhook Trigger
+```
+Type: Webhook
+Method: POST
+Path: /request-structure
+Expected Body:
+{
+  "request_id": 123,
+  "title": "Hybrid Golf Club - 3 Hybrid",
+  "requirements": "Stiff flex, 3 hybrid or better, loft 18-20 degrees, located in Gothenburg",
+  "category": "5091",
+  "max_budget": 1500
+}
+```
+
+#### Node 2: AI - Structure Requirements
+```
+Type: OpenAI / Anthropic
+Model: gpt-4 / claude-3-sonnet
+System Prompt:
+You are a requirement analyzer. Parse the user's requirements into structured criteria.
+
+Output format (JSON):
+{
+  "must_have": ["list of absolutely required features"],
+  "preferred": ["list of nice-to-have features"],
+  "quality_expectations": "description of expected condition",
+  "location_requirements": "location constraints if any",
+  "budget_notes": "any budget-related notes"
+}
+
+User Prompt:
+Category: {{ $json.category }}
+Budget: {{ $json.max_budget }} kr
+Requirements: {{ $json.requirements }}
+
+Parse these requirements and output structured JSON.
+```
+
+#### Node 3: AI - Generate Evaluation Prompt
+```
+Type: OpenAI / Anthropic
+Model: gpt-4 / claude-3-sonnet
+System Prompt:
+Create a specialized evaluation prompt for AI to judge if a listing matches the user's requirements.
+The prompt should be strict and only give 9-10 scores for perfect matches.
+
+User Prompt:
+Title: {{ $json.title }}
+Requirements: {{ $('Node 2').json }}
+
+Create an evaluation prompt that checks these requirements strictly.
+Format as a clear prompt that another AI can use.
+```
+
+#### Node 4: PostgreSQL - Update Request
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+UPDATE deal_requests
+SET structured_prompt = $1
+WHERE id = $2;
+
+Query Parameters:
+  $1: {{ $('Node 3').json.prompt }}
+  $2: {{ $json.request_id }}
+```
+
+#### Node 5: Respond to Webhook
+```
+Type: Respond to Webhook
+Status Code: 200
+Body: { "success": true, "request_id": {{ $json.request_id }} }
+```
+
+---
+
+## Workflow 5: Request Processor - Find & Evaluate Matches
+
+**Schedule:** Every hour
+
+### Workflow Description
+
+1. Queries all active, approved requests
+2. For each request, searches Blocket in specified category
+3. Filters by budget
+4. Evaluates matches using request-specific prompt
+5. Sends email notifications for 9-10 scores
+6. Marks request as fulfilled
+7. Expires old requests and notifies subscribers
+
+### Nodes Configuration
+
+#### Node 1: Schedule Trigger
+```
+Type: Schedule Trigger
+Cron: 0 0 * * * *  (every hour at minute 0)
+```
+
+#### Node 2: PostgreSQL - Get Active Requests
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+SELECT * FROM deal_requests
+WHERE approved = true
+  AND status = 'active'
+  AND expires_at > NOW()
+ORDER BY created_at ASC;
+```
+
+#### Node 3: Check If Requests Exist
+```
+Type: IF
+Condition: {{ $json.length }} > 0
+```
+
+#### Node 4: Loop Through Requests
+```
+Type: Loop
+(Process each request)
+```
+
+#### Node 5: HTTP Request - Search Blocket
+```
+Type: HTTP Request
+Method: GET
+URL: http://dealradar-api:5000/api/search
+Query Parameters:
+  category: {{ $json.category }}
+  limit: 20
+```
+
+#### Node 6: Filter by Budget
+```
+Type: Code
+JavaScript:
+const request = $input.item.json;
+const posts = $json.posts;
+const maxBudget = request.max_budget;
+
+if (!maxBudget) {
+  return posts.map(p => ({ json: { ...p, request_id: request.id, request_prompt: request.structured_prompt }}));
+}
+
+const filtered = posts.filter(post => {
+  const priceMatch = post.price.match(/\d+/);
+  const price = priceMatch ? parseInt(priceMatch[0]) : 0;
+  return price <= maxBudget;
+});
+
+return filtered.map(p => ({ json: { ...p, request_id: request.id, request_prompt: request.structured_prompt }}));
+```
+
+#### Node 7: Check for Already Evaluated
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+SELECT ad_id FROM request_matches
+WHERE request_id = $1 AND ad_id = $2;
+
+Query Parameters:
+  $1: {{ $json.request_id }}
+  $2: {{ $json.ad_id }}
+```
+
+#### Node 8: Skip if Already Matched
+```
+Type: IF
+Condition: {{ $json.length }} === 0
+(Only continue if no existing match)
+```
+
+#### Node 9: AI - Evaluate Match
+```
+Type: OpenAI / Anthropic
+Model: gpt-4 / claude-3-sonnet
+System Prompt: {{ $json.request_prompt }}
+
+User Prompt:
+Title: {{ $json.title }}
+Price: {{ $json.price }}
+Description: {{ $json.description }}
+Location: {{ $json.location }}
+
+Evaluate if this listing matches the requirements.
+Output JSON:
+{
+  "score": 1-10,
+  "reasoning": "explanation",
+  "matches_requirements": true/false
+}
+```
+
+#### Node 10: Check Score >= 9
+```
+Type: IF
+Condition: {{ $json.score }} >= 9
+```
+
+#### Node 11: PostgreSQL - Save Match
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+INSERT INTO request_matches (request_id, ad_id, value_score)
+VALUES ($1, $2, $3)
+ON CONFLICT (request_id, ad_id) DO NOTHING;
+
+Query Parameters:
+  $1: {{ $json.request_id }}
+  $2: {{ $json.ad_id }}
+  $3: {{ $json.score }}
+```
+
+#### Node 12: PostgreSQL - Get Subscribers
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+SELECT email FROM request_subscriptions
+WHERE request_id = $1;
+
+Query Parameters:
+  $1: {{ $json.request_id }}
+```
+
+#### Node 13: Loop Through Subscribers
+```
+Type: Loop
+(Send email to each subscriber)
+```
+
+#### Node 14: Send Email Notification
+```
+Type: Email Send
+To: {{ $json.email }}
+Subject: 🎯 DealRadar: Perfect Match Found for "{{ $('Node 9').json.title }}"
+Text:
+Great news! We found a perfect match for your request:
+
+Request: {{ $('Node 4').json.title }}
+Match Score: {{ $('Node 9').json.score }}/10
+
+📦 Listing: {{ $('Node 9').json.title }}
+💰 Price: {{ $('Node 9').json.price }}
+📍 Location: {{ $('Node 9').json.location }}
+
+✨ AI Evaluation:
+{{ $('Node 9').json.reasoning }}
+
+🔗 View on Blocket:
+https://www.blocket.se/annons/{{ $('Node 9').json.ad_id }}
+
+🔗 View on DealRadar:
+https://runevibe.se/requests/{{ $json.request_id }}
+```
+
+#### Node 15: PostgreSQL - Mark Request Fulfilled
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+UPDATE deal_requests
+SET status = 'fulfilled',
+    fulfilled_at = NOW()
+WHERE id = $1;
+
+Query Parameters:
+  $1: {{ $json.request_id }}
+```
+
+#### Node 16: Check Expired Requests (Separate Branch)
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+SELECT dr.*, rs.email
+FROM deal_requests dr
+LEFT JOIN request_subscriptions rs ON dr.id = rs.request_id
+WHERE dr.status = 'active'
+  AND dr.approved = true
+  AND dr.expires_at <= NOW();
+```
+
+#### Node 17: Loop Through Expired Requests
+```
+Type: Loop
+```
+
+#### Node 18: Send Expiration Email
+```
+Type: Email Send
+To: {{ $json.email }}
+Subject: ⏱️ DealRadar: Request "{{ $json.title }}" Has Expired
+Text:
+Your deal request has expired without finding a perfect match.
+
+Request: {{ $json.title }}
+Category: {{ $json.category }}
+Budget: {{ $json.max_budget }} kr
+
+Unfortunately, we didn't find any items scoring 9-10 that matched your requirements within 7 days.
+
+You can create a new request with adjusted criteria at:
+https://runevibe.se/requests/new
+```
+
+#### Node 19: PostgreSQL - Mark as Expired
+```
+Type: Postgres
+Operation: Execute Query
+Query:
+UPDATE deal_requests
+SET status = 'expired'
+WHERE id = $1;
+
+Query Parameters:
+  $1: {{ $json.id }}
+```
+
+---
+
 ## Advanced Configurations
 
 ### 1. Multi-Category Scraping
