@@ -12,3 +12,5 @@ CLAUDE.md
 .pytest_cache
 .claude
 .env
+
+prompts

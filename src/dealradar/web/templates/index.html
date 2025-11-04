@@ -1,45 +1,60 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="search-box">
-    <input type="text"
-           id="search-query"
-           name="query"
-           placeholder="Ask me anything... e.g., 'I have 7000 kr budget, what are the best computer deals?'"
-           />
-    <button
-        hx-get="/api/deals/search"
-        hx-target="#deals-container"
-        hx-include="[name='query']"
-        hx-indicator="#loading">
-        Search
-    </button>
-    <button
-        hx-get="/api/deals?min_score=8"
-        hx-target="#deals-container"
-        hx-indicator="#loading"
-        class="secondary">
-        Show All
-    </button>
-</div>
-
 <div class="filters">
-    <label>Min Score:</label>
-    <select id="min-score" name="min_score">
-        <option value="1">1+</option>
-        <option value="5">5+</option>
-        <option value="7">7+</option>
-        <option value="8" selected>8+ (High Value)</option>
-        <option value="9">9+ (Excellent)</option>
-    </select>
+    <div class="filter-row">
+        <input type="text"
+               id="search-query"
+               name="query"
+               placeholder="Search keywords (e.g., 'computer', 'gaming', 'laptop')..."
+               style="flex: 2; min-width: 200px;"/>
 
-    <button
-        hx-get="/api/deals"
-        hx-target="#deals-container"
-        hx-include="[name='min_score']"
-        hx-indicator="#loading">
-        Refresh
-    </button>
+        <select name="category" id="category" style="flex: 1;">
+            <option value="">All Categories</option>
+            <option value="5021">Computers</option>
+            <option value="5020">Computer Accessories</option>
+            <option value="5040">Mobile Phones</option>
+            <option value="5060">Gaming Consoles</option>
+            <option value="5090">Sports & Outdoors</option>
+            <option value="40">Furniture & Home</option>
+            <option value="10">Vehicles</option>
+        </select>
+    </div>
+
+    <div class="filter-row">
+        <label>Min Score:</label>
+        <select id="min-score" name="min_score">
+            <option value="1">1+</option>
+            <option value="5">5+</option>
+            <option value="7">7+</option>
+            <option value="8" selected>8+ (High Value)</option>
+            <option value="9">9+ (Excellent)</option>
+        </select>
+
+        <label>Max Price:</label>
+        <input type="number"
+               name="max_price"
+               id="max-price"
+               placeholder="e.g., 6000"
+               min="0"
+               style="width: 150px;"/>
+
+        <button
+            hx-get="/api/deals"
+            hx-target="#deals-container"
+            hx-include="[name='query'], [name='category'], [name='min_score'], [name='max_price']"
+            hx-indicator="#loading">
+            Search
+        </button>
+
+        <button
+            hx-get="/api/deals?min_score=8"
+            hx-target="#deals-container"
+            hx-indicator="#loading"
+            class="secondary">
+            Reset
+        </button>
+    </div>
 </div>
 
 <div id="loading" class="loading htmx-indicator">
@@ -60,5 +75,18 @@
     setInterval(() => {
         htmx.trigger('#deals-container', 'load');
     }, 300000);
+
+    // Allow Enter key to trigger search
+    document.getElementById('search-query').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.querySelector('button[hx-get="/api/deals"]').click();
+        }
+    });
+
+    document.getElementById('max-price').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.querySelector('button[hx-get="/api/deals"]').click();
+        }
+    });
 </script>
 {% endblock %}

@@ -90,6 +90,12 @@ header p {
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     margin-bottom: 30px;
     display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.filter-row {
+    display: flex;
     gap: 15px;
     align-items: center;
     flex-wrap: wrap;
@@ -100,15 +106,29 @@ header p {
     color: #333;
 }
 
-.filters select, .filters input {
-    padding: 8px 12px;
+.filters select, .filters input[type="number"] {
+    padding: 10px 12px;
     border: 2px solid #e0e0e0;
     border-radius: 6px;
     font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.filters input[type="text"] {
+    padding: 10px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.filters input:focus, .filters select:focus {
+    outline: none;
+    border-color: #667eea;
 }
 
 .filters button {
-    padding: 8px 20px;
+    padding: 10px 24px;
     background: #667eea;
     color: white;
     border: none;
@@ -120,6 +140,14 @@ header p {
 
 .filters button:hover {
     background: #5568d3;
+}
+
+.filters button.secondary {
+    background: #6c757d;
+}
+
+.filters button.secondary:hover {
+    background: #5a6268;
 }
 
 #deals-container {

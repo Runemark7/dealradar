@@ -245,9 +245,12 @@ def register_routes(app):
 
     @app.route('/api/deals', methods=['GET'])
     def get_deals():
-        """API endpoint to fetch evaluated deals"""
+        """Unified API endpoint to fetch and filter evaluated deals"""
         try:
             min_score = request.args.get('min_score', default=8, type=float)
+            max_price = request.args.get('max_price', type=int)
+            category = request.args.get('category', '').strip()
+            query_text = request.args.get('query', '').strip()
             limit = request.args.get('limit', default=99999, type=int)
 
             # Validate inputs
@@ -259,102 +262,46 @@ def register_routes(app):
             conn = get_db_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-            # Query evaluated posts
-            query = """
-                SELECT
-                    p.ad_id,
-                    p.title,
-                    p.price,
-                    p.description,
-                    p.location,
-                    p.category,
-                    p.company_ad,
-                    e.value_score,
-                    e.evaluation_notes,
-                    e.notification_message,
-                    e.estimated_market_value,
-                    e.specs,
-                    e.evaluated_at
-                FROM posts p
-                INNER JOIN evaluations e ON p.ad_id = e.ad_id
-                WHERE e.value_score >= %s
-                  AND e.status = 'completed'
-                ORDER BY e.value_score DESC, e.evaluated_at DESC
-                LIMIT %s
-            """
+            # Build dynamic query with filters
+            sql_conditions = ["e.status = 'completed'", "e.value_score >= %s"]
+            sql_params = [min_score]
 
-            cursor.execute(query, (min_score, limit))
-            deals = cursor.fetchall()
-
-            cursor.close()
-            conn.close()
-
-            # Return HTML for HTMX using template
-            return render_template('deals_list.html', deals=deals)
-
-        except Exception as e:
-            return render_template('deals_list.html', deals=[], error=str(e)), 500
-
-    @app.route('/api/deals/search', methods=['GET'])
-    def search_deals():
-        """Natural language search endpoint for deals"""
-        try:
-            query = request.args.get('query', '').strip()
-
-            if not query:
-                return render_template(
-                    'search_results.html',
-                    deals=[],
-                    query='',
-                    max_price=None,
-                    keywords=[]
-                )
-
-            # Extract budget/price from query (look for numbers)
-            import re
-            numbers = re.findall(r'\d+', query)
-            max_price = None
-            if numbers:
-                # Take the largest number as the budget
-                max_price = max([int(n) for n in numbers])
-
-            # Extract keywords from query (remove common words)
-            stop_words = {'i', 'have', 'the', 'a', 'an', 'are', 'is', 'what', 'for', 'if', 'want', 'need',
-                         'looking', 'budget', 'kr', 'sek', 'best', 'good', 'deals', 'deal'}
-            keywords = [word.lower() for word in re.findall(r'\b\w+\b', query)
-                       if word.lower() not in stop_words and len(word) > 2]
-
-            conn = get_db_connection()
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-            # Build the search query
-            sql_conditions = ["e.status = 'completed'"]
-            sql_params = []
-
-            # Add price filter if budget was specified
+            # Add price filter if specified
             if max_price:
-                # Extract numeric price from price string, handle empty strings
                 sql_conditions.append("""
                     (regexp_replace(p.price, '[^0-9]', '', 'g') != '' AND
                      CAST(regexp_replace(p.price, '[^0-9]', '', 'g') AS INTEGER) <= %s)
                 """)
                 sql_params.append(max_price)
 
-            # Add text search conditions if keywords exist
-            if keywords:
-                keyword_conditions = []
-                for keyword in keywords[:5]:  # Limit to 5 keywords
-                    keyword_conditions.append(
-                        "(p.title ILIKE %s OR p.description ILIKE %s OR "
-                        "e.evaluation_notes ILIKE %s OR e.notification_message ILIKE %s OR "
-                        "e.specs::text ILIKE %s)"
-                    )
-                    keyword_pattern = f'%{keyword}%'
-                    sql_params.extend([keyword_pattern] * 5)
+            # Add category filter if specified
+            if category:
+                sql_conditions.append("p.category = %s")
+                sql_params.append(category)
 
-                if keyword_conditions:
-                    sql_conditions.append(f"({' OR '.join(keyword_conditions)})")
+            # Add text search if specified
+            if query_text:
+                import re
+                stop_words = {'i', 'have', 'the', 'a', 'an', 'are', 'is', 'what', 'for', 'if', 'want', 'need',
+                             'looking', 'budget', 'kr', 'sek', 'best', 'good', 'deals', 'deal'}
+                keywords = [word.lower() for word in re.findall(r'\b\w+\b', query_text)
+                           if word.lower() not in stop_words and len(word) > 2]
 
+                if keywords:
+                    keyword_conditions = []
+                    for keyword in keywords[:5]:  # Limit to 5 keywords
+                        keyword_conditions.append(
+                            "(p.title ILIKE %s OR p.description ILIKE %s OR "
+                            "e.evaluation_notes ILIKE %s OR e.notification_message ILIKE %s OR "
+                            "e.specs::text ILIKE %s)"
+                        )
+                        keyword_pattern = f'%{keyword}%'
+                        sql_params.extend([keyword_pattern] * 5)
+
+                    if keyword_conditions:
+                        sql_conditions.append(f"({' OR '.join(keyword_conditions)})")
+
+            # Query evaluated posts with all filters
             query_sql = f"""
                 SELECT
                     p.ad_id,
@@ -374,9 +321,10 @@ def register_routes(app):
                 INNER JOIN evaluations e ON p.ad_id = e.ad_id
                 WHERE {' AND '.join(sql_conditions)}
                 ORDER BY e.value_score DESC, e.evaluated_at DESC
-                LIMIT 50
+                LIMIT %s
             """
 
+            sql_params.append(limit)
             cursor.execute(query_sql, sql_params)
             deals = cursor.fetchall()
 
@@ -384,23 +332,11 @@ def register_routes(app):
             conn.close()
 
             # Return HTML for HTMX using template
-            return render_template(
-                'search_results.html',
-                deals=deals,
-                query=query,
-                max_price=max_price,
-                keywords=keywords
-            )
+            return render_template('deals_list.html', deals=deals)
 
         except Exception as e:
-            return render_template(
-                'search_results.html',
-                deals=[],
-                query=query if 'query' in locals() else '',
-                max_price=None,
-                keywords=[],
-                error=str(e)
-            ), 500
+            return render_template('deals_list.html', deals=[], error=str(e)), 500
+
 
     @app.route('/requests')
     def requests_list():
