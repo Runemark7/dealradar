@@ -279,6 +279,49 @@ def register_routes(app):
             font-size: 1.2em;
             opacity: 0.9;
         }
+        .search-box {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .search-box input[type="text"] {
+            flex: 1;
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+        .search-box input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .search-box button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            transition: background 0.3s;
+            white-space: nowrap;
+        }
+        .search-box button:hover {
+            background: #5568d3;
+        }
+        .search-box button.secondary {
+            background: #6c757d;
+        }
+        .search-box button.secondary:hover {
+            background: #5a6268;
+        }
         .filters {
             background: white;
             padding: 20px;
@@ -436,6 +479,28 @@ def register_routes(app):
             <p>AI-Evaluated Blocket Deals</p>
         </header>
 
+        <div class="search-box">
+            <input type="text"
+                   id="search-query"
+                   name="query"
+                   placeholder="Ask me anything... e.g., 'I have 7000 kr budget, what are the best computer deals?'"
+                   />
+            <button
+                hx-get="/api/search"
+                hx-target="#deals-container"
+                hx-include="[name='query']"
+                hx-indicator="#loading">
+                Search
+            </button>
+            <button
+                hx-get="/api/deals?min_score=8&limit=20"
+                hx-target="#deals-container"
+                hx-indicator="#loading"
+                class="secondary">
+                Show All
+            </button>
+        </div>
+
         <div class="filters">
             <label>Min Score:</label>
             <select id="min-score" name="min_score">
@@ -584,3 +649,165 @@ def register_routes(app):
 
         except Exception as e:
             return f'<div class="no-deals"><h2>Error</h2><p>{str(e)}</p></div>', 500
+
+    @app.route('/api/search', methods=['GET'])
+    def search_deals():
+        """Natural language search endpoint for deals"""
+        try:
+            query = request.args.get('query', '').strip()
+
+            if not query:
+                return """
+                <div class="no-deals">
+                    <h2>No search query</h2>
+                    <p>Please enter a search query above</p>
+                </div>
+                """
+
+            # Extract budget/price from query (look for numbers)
+            import re
+            numbers = re.findall(r'\d+', query)
+            max_price = None
+            if numbers:
+                # Take the largest number as the budget
+                max_price = max([int(n) for n in numbers])
+
+            # Extract keywords from query (remove common words)
+            stop_words = {'i', 'have', 'the', 'a', 'an', 'are', 'is', 'what', 'for', 'if', 'want', 'need',
+                         'looking', 'budget', 'kr', 'sek', 'best', 'good', 'deals', 'deal'}
+            keywords = [word.lower() for word in re.findall(r'\b\w+\b', query)
+                       if word.lower() not in stop_words and len(word) > 2]
+
+            conn = get_db_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Build the search query
+            sql_conditions = ["e.status = 'completed'"]
+            sql_params = []
+
+            # Add price filter if budget was specified
+            if max_price:
+                # Extract numeric price from price string
+                sql_conditions.append("CAST(regexp_replace(p.price, '[^0-9]', '', 'g') AS INTEGER) <= %s")
+                sql_params.append(max_price)
+
+            # Add text search conditions if keywords exist
+            if keywords:
+                keyword_conditions = []
+                for keyword in keywords[:5]:  # Limit to 5 keywords
+                    keyword_conditions.append(
+                        "(p.title ILIKE %s OR p.description ILIKE %s OR "
+                        "e.evaluation_notes ILIKE %s OR e.notification_message ILIKE %s OR "
+                        "e.specs::text ILIKE %s)"
+                    )
+                    keyword_pattern = f'%{keyword}%'
+                    sql_params.extend([keyword_pattern] * 5)
+
+                if keyword_conditions:
+                    sql_conditions.append(f"({' OR '.join(keyword_conditions)})")
+
+            query_sql = f"""
+                SELECT
+                    p.ad_id,
+                    p.title,
+                    p.price,
+                    p.description,
+                    p.location,
+                    p.category,
+                    p.company_ad,
+                    e.value_score,
+                    e.evaluation_notes,
+                    e.notification_message,
+                    e.estimated_market_value,
+                    e.specs,
+                    e.evaluated_at
+                FROM posts p
+                INNER JOIN evaluations e ON p.ad_id = e.ad_id
+                WHERE {' AND '.join(sql_conditions)}
+                ORDER BY e.value_score DESC, e.evaluated_at DESC
+                LIMIT 50
+            """
+
+            cursor.execute(query_sql, sql_params)
+            deals = cursor.fetchall()
+
+            cursor.close()
+            conn.close()
+
+            # Return HTML for HTMX
+            if not deals:
+                search_info = f"<p><strong>Search:</strong> {query}</p>"
+                if max_price:
+                    search_info += f"<p><strong>Budget:</strong> Up to {max_price} kr</p>"
+                if keywords:
+                    search_info += f"<p><strong>Keywords:</strong> {', '.join(keywords)}</p>"
+
+                return f"""
+                <div class="no-deals">
+                    <h2>No deals found</h2>
+                    {search_info}
+                    <p>Try adjusting your search or removing some filters</p>
+                </div>
+                """
+
+            html_parts = []
+
+            # Add search summary
+            search_summary = f"""
+            <div style="grid-column: 1 / -1; background: white; padding: 20px; border-radius: 12px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px;">
+                <h3 style="margin-bottom: 10px; color: #333;">Search Results ({len(deals)} found)</h3>
+                <p style="color: #666; margin-bottom: 5px;"><strong>Query:</strong> {query}</p>
+                {f'<p style="color: #666; margin-bottom: 5px;"><strong>Budget:</strong> Up to {max_price} kr</p>' if max_price else ''}
+                {f'<p style="color: #666;"><strong>Keywords:</strong> {", ".join(keywords)}</p>' if keywords else ''}
+            </div>
+            """
+            html_parts.append(search_summary)
+
+            for deal in deals:
+                specs_html = ""
+                if deal['specs']:
+                    specs_items = []
+                    for key, value in deal['specs'].items():
+                        specs_items.append(f'<div class="deal-specs-item"><strong>{key}:</strong> {value}</div>')
+                    specs_html = f'<div class="deal-specs">{"".join(specs_items)}</div>'
+
+                notification_html = ""
+                if deal['notification_message']:
+                    notification_html = f'<div class="deal-notification">{deal["notification_message"]}</div>'
+
+                market_value_html = ""
+                if deal['estimated_market_value']:
+                    market_value_html = f'''
+                    <div class="deal-info">
+                        <div class="deal-info-label">Market Value</div>
+                        <div class="deal-info-value">{deal["estimated_market_value"]}</div>
+                    </div>
+                    '''
+
+                evaluated_date = deal['evaluated_at'].strftime('%Y-%m-%d %H:%M') if deal['evaluated_at'] else 'N/A'
+
+                card_html = f'''
+                <div class="deal-card">
+                    <div class="deal-header">
+                        <div class="deal-score">⭐ {deal["value_score"]}/10</div>
+                        <div class="deal-title">{deal["title"]}</div>
+                        <div class="deal-price">{deal["price"]}</div>
+                    </div>
+                    <div class="deal-body">
+                        {notification_html}
+                        {market_value_html}
+                        {specs_html}
+                    </div>
+                    <div class="deal-footer">
+                        <span class="deal-date">Evaluated: {evaluated_date}</span>
+                        <a href="https://www.blocket.se/annons/{deal["ad_id"]}" target="_blank">View on Blocket →</a>
+                    </div>
+                </div>
+                '''
+                html_parts.append(card_html)
+
+            return "".join(html_parts)
+
+        except Exception as e:
+            return f'<div class="no-deals"><h2>Search Error</h2><p>{str(e)}</p></div>', 500
