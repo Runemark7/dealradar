@@ -1,0 +1,13 @@
+{% macro render_search_summary(query, max_price, keywords, result_count) %}
+<div style="grid-column: 1 / -1; background: white; padding: 20px; border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px;">
+    <h3 style="margin-bottom: 10px; color: #333;">Search Results ({{ result_count }} found)</h3>
+    <p style="color: #666; margin-bottom: 5px;"><strong>Query:</strong> {{ query }}</p>
+    {% if max_price %}
+    <p style="color: #666; margin-bottom: 5px;"><strong>Budget:</strong> Up to {{ max_price }} kr</p>
+    {% endif %}
+    {% if keywords %}
+    <p style="color: #666;"><strong>Keywords:</strong> {{ keywords|join(', ') }}</p>
+    {% endif %}
+</div>
+{% endmacro %}

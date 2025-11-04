@@ -1,0 +1,33 @@
+{% macro render_deal_card(deal) %}
+<div class="deal-card">
+    <div class="deal-header">
+        <div class="deal-score">⭐ {{ deal.value_score }}/10</div>
+        <div class="deal-title">{{ deal.title }}</div>
+        <div class="deal-price">{{ deal.price }}</div>
+    </div>
+    <div class="deal-body">
+        {% if deal.notification_message %}
+        <div class="deal-notification">{{ deal.notification_message }}</div>
+        {% endif %}
+
+        {% if deal.estimated_market_value %}
+        <div class="deal-info">
+            <div class="deal-info-label">Market Value</div>
+            <div class="deal-info-value">{{ deal.estimated_market_value }}</div>
+        </div>
+        {% endif %}
+
+        {% if deal.specs %}
+        <div class="deal-specs">
+            {% for key, value in deal.specs.items() %}
+            <div class="deal-specs-item"><strong>{{ key }}:</strong> {{ value }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="deal-footer">
+        <span class="deal-date">Evaluated: {{ deal.evaluated_at.strftime('%Y-%m-%d %H:%M') if deal.evaluated_at else 'N/A' }}</span>
+        <a href="https://www.blocket.se/annons/{{ deal.ad_id }}" target="_blank">View on Blocket →</a>
+    </div>
+</div>
+{% endmacro %}

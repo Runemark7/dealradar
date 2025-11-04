@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="search-box">
+    <input type="text"
+           id="search-query"
+           name="query"
+           placeholder="Ask me anything... e.g., 'I have 7000 kr budget, what are the best computer deals?'"
+           />
+    <button
+        hx-get="/api/deals/search"
+        hx-target="#deals-container"
+        hx-include="[name='query']"
+        hx-indicator="#loading">
+        Search
+    </button>
+    <button
+        hx-get="/api/deals?min_score=8"
+        hx-target="#deals-container"
+        hx-indicator="#loading"
+        class="secondary">
+        Show All
+    </button>
+</div>
+
+<div class="filters">
+    <label>Min Score:</label>
+    <select id="min-score" name="min_score">
+        <option value="1">1+</option>
+        <option value="5">5+</option>
+        <option value="7">7+</option>
+        <option value="8" selected>8+ (High Value)</option>
+        <option value="9">9+ (Excellent)</option>
+    </select>
+
+    <button
+        hx-get="/api/deals"
+        hx-target="#deals-container"
+        hx-include="[name='min_score']"
+        hx-indicator="#loading">
+        Refresh
+    </button>
+</div>
+
+<div id="loading" class="loading htmx-indicator">
+    Loading deals...
+</div>
+
+<div
+    id="deals-container"
+    hx-get="/api/deals?min_score=8"
+    hx-trigger="load"
+    hx-swap="innerHTML">
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-refresh every 5 minutes
+    setInterval(() => {
+        htmx.trigger('#deals-container', 'load');
+    }, 300000);
+</script>
+{% endblock %}

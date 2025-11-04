@@ -1,0 +1,12 @@
+{% from "components/deal_card.html" import render_deal_card %}
+
+{% if deals %}
+    {% for deal in deals %}
+        {{ render_deal_card(deal) }}
+    {% endfor %}
+{% else %}
+    <div class="no-deals">
+        <h2>No deals found</h2>
+        <p>Try adjusting your filters or check back later</p>
+    </div>
+{% endif %}

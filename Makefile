@@ -1,4 +1,4 @@
-.PHONY: image run stop logs clean dev test help
+.PHONY: image run stop restart status logs logs-db clean dev test cli help
 IMAGE_NAME := blocket-scraper
 CONTAINER_NAME := blocket-scraper-api
 PORT := 5000
@@ -6,35 +6,50 @@ PORT := 5000
 
 help:
 	@echo "Available targets:"
-	@echo "  image       - Build the image (runs tests first)"
-	@echo "  run         - Run the API container"
-	@echo "  stop        - Stop the running container"
-	@echo "  logs        - View container logs"
-	@echo "  clean       - Remove container and image"
+	@echo "  image       - Build the Docker image"
+	@echo "  run         - Run API + database using docker-compose"
+	@echo "  stop        - Stop all containers (docker-compose)"
+	@echo "  restart     - Restart all containers"
+	@echo "  status      - Show running services status"
+	@echo "  logs        - View API container logs"
+	@echo "  logs-db     - View database logs"
+	@echo "  clean       - Remove containers, volumes, and images"
 	@echo "  dev         - Run Flask API locally (dev mode)"
 	@echo "  test        - Run pytest test suite"
 	@echo "  cli         - Run CLI tool in container (usage: make cli ARGS='1213726656')"
 
 image:
 	@echo "Building container image..."
-	docker build -t $(IMAGE_NAME) -f Containerfile .
+	docker build -t $(IMAGE_NAME):latest -f Containerfile .
 
 run:
-	@echo "Starting API container on port $(PORT)..."
-	docker run -d --name $(CONTAINER_NAME) -p $(PORT):5000 $(IMAGE_NAME)
-	@echo "API running at http://localhost:$(PORT)"
+	@echo "Starting API + database with docker-compose..."
+	@echo "(This will build the image if it doesn't exist)"
+	docker-compose up -d --build
+	@echo ""
+	@echo "Services started:"
+	@echo "  - API running at http://localhost:5000"
+	@echo "  - PostgreSQL running at localhost:5432"
+	@echo ""
+	@echo "Use 'make logs' to view logs"
+	@echo "Use 'make stop' to stop services"
 
 stop:
-	@echo "Stopping container..."
-	-docker stop $(CONTAINER_NAME)
-	-docker rm $(CONTAINER_NAME)
+	@echo "Stopping all containers..."
+	docker-compose down
 
 logs:
-	docker logs -f $(CONTAINER_NAME)
+	@echo "Showing logs (Ctrl+C to exit)..."
+	docker-compose logs -f blocket-scraper
+
+logs-db:
+	@echo "Showing database logs (Ctrl+C to exit)..."
+	docker-compose logs -f postgres
 
 clean: stop
-	@echo "Removing image..."
-	-docker rmi $(IMAGE_NAME)
+	@echo "Removing containers and images..."
+	docker-compose down -v
+	-docker rmi $(IMAGE_NAME):latest
 
 dev:
 	@echo "Starting Flask API in development mode..."
@@ -54,8 +69,5 @@ cli:
 restart: stop run
 
 status:
-	@echo "Container status:"
-	@docker ps -a | grep $(CONTAINER_NAME) || echo "Container not running"
-	@echo ""
-	@echo "Image info:"
-	@docker images | grep $(IMAGE_NAME) || echo "Image not found"
+	@echo "Services status:"
+	@docker-compose ps

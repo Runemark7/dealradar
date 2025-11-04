@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: bitnami/postgresql:latest
@@ -14,17 +12,30 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/bitnami/postgresql
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dealradar -d dealradar"]
       interval: 10s
       timeout: 5s
       retries: 5
   blocket-scraper:
+    build:
+      context: .
+      dockerfile: Containerfile
     image: blocket-scraper:latest
     container_name: blocket-scraper
     ports:
       - "5000:5000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: dealradar
+      DB_USER: dealradar
+      DB_PASSWORD: dealradar
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

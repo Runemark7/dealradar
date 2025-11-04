@@ -1,0 +1,258 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header {
+    text-align: center;
+    color: white;
+    margin-bottom: 40px;
+}
+
+header h1 {
+    font-size: 3em;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+header p {
+    font-size: 1.2em;
+    opacity: 0.9;
+}
+
+.search-box {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.search-box input[type="text"] {
+    flex: 1;
+    padding: 12px 18px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 15px;
+    transition: border-color 0.3s;
+}
+
+.search-box input[type="text"]:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.search-box button {
+    padding: 12px 30px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 15px;
+    transition: background 0.3s;
+    white-space: nowrap;
+}
+
+.search-box button:hover {
+    background: #5568d3;
+}
+
+.search-box button.secondary {
+    background: #6c757d;
+}
+
+.search-box button.secondary:hover {
+    background: #5a6268;
+}
+
+.filters {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filters label {
+    font-weight: 600;
+    color: #333;
+}
+
+.filters select, .filters input {
+    padding: 8px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.filters button {
+    padding: 8px 20px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+
+.filters button:hover {
+    background: #5568d3;
+}
+
+#deals-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 25px;
+}
+
+.deal-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.deal-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+}
+
+.deal-header {
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.deal-score {
+    display: inline-block;
+    background: rgba(255,255,255,0.3);
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-bottom: 10px;
+}
+
+.deal-title {
+    font-size: 1.3em;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.deal-price {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.deal-body {
+    padding: 20px;
+}
+
+.deal-info {
+    margin-bottom: 15px;
+}
+
+.deal-info-label {
+    font-weight: 600;
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+}
+
+.deal-info-value {
+    color: #333;
+}
+
+.deal-specs {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 15px 0;
+    font-size: 0.9em;
+}
+
+.deal-specs-item {
+    margin: 5px 0;
+}
+
+.deal-notification {
+    background: #e3f2fd;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 4px solid #2196F3;
+    margin: 15px 0;
+    font-size: 0.95em;
+    color: #1565C0;
+}
+
+.deal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.deal-footer a {
+    background: #667eea;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+
+.deal-footer a:hover {
+    background: #5568d3;
+}
+
+.deal-date {
+    color: #666;
+    font-size: 0.85em;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: white;
+    font-size: 1.2em;
+}
+
+.no-deals {
+    text-align: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 12px;
+    color: #666;
+}
+
+.no-deals h2 {
+    font-size: 2em;
+    margin-bottom: 10px;
+    color: #333;
+}
