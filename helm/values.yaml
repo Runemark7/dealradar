@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: "ghcr.io/runemark7/dealradar"
   pullPolicy: Always
-  tag: "c16ec733dd5f8829a379d8657ef23b9b198583c7"
+  tag: "08a5f567ad1ef49bb84da763b15461c723a8d3bc"
 
 imagePullSecrets:
   - name: ghcr-secret
