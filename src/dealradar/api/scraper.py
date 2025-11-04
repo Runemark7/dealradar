@@ -11,19 +11,21 @@ from .client import get_auth_token, get_api_headers
 from ..config import settings
 
 
-async def fetch_search_results(category_id: str, limit: int = 10) -> List[str]:
+async def fetch_search_results(category_id: str, limit: int = 10, keywords: str = None) -> List[str]:
     """
     Fetch search results from Blocket API.
 
     Args:
         category_id: Blocket category ID (e.g., "5021")
         limit: Number of latest listings to return (default 10)
+        keywords: Search keywords to filter results (optional)
 
     Returns:
         List of ad IDs sorted by timestamp (newest first)
     """
     try:
-        print(f"[SEARCH] Fetching listings from category {category_id}...")
+        keywords_str = f" with keywords '{keywords}'" if keywords else ""
+        print(f"[SEARCH] Fetching listings from category {category_id}{keywords_str}...")
 
         # Get auth token first
         token = await get_auth_token()
@@ -38,6 +40,10 @@ async def fetch_search_results(category_id: str, limit: int = 10) -> List[str]:
             "lim": min(max(limit, 50), 99),  # API max is 99
             "status": "active"
         }
+
+        # Add search query if keywords provided
+        if keywords:
+            params["q"] = keywords
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -248,13 +254,14 @@ async def fetch_blocket_api(ad_id: str) -> Optional[Dict]:
                 listing = api_response_data['data']
 
                 # Extract all relevant fields
+                category_obj = listing.get('category', {})
                 listing_data = {
                     "ad_id": listing.get('ad_id'),
                     "title": listing.get('subject'),
                     "description": listing.get('body'),
                     "price": f"{listing.get('price', {}).get('value')} kr" if listing.get('price') else None,
                     "location": listing.get('location', {}).get('name') if isinstance(listing.get('location'), dict) else None,
-                    "category": listing.get('category', {}).get('name') if isinstance(listing.get('category'), dict) else None,
+                    "category": str(category_obj.get('id')) if isinstance(category_obj, dict) and category_obj.get('id') else None,
                     "images": [img.get('url') for img in listing.get('images', [])] if listing.get('images') else [],
                     "seller": listing.get('advertiser', {}).get('name') if isinstance(listing.get('advertiser'), dict) else None,
                     "company_ad": listing.get('company_ad', False),
@@ -275,13 +282,14 @@ async def fetch_blocket_api(ad_id: str) -> Optional[Dict]:
         return None
 
 
-async def fetch_multiple_listings(ad_ids: List[str], batch_size: int = None) -> List[Dict]:
+async def fetch_multiple_listings(ad_ids: List[str], batch_size: int = None, category_id: str = None) -> List[Dict]:
     """
     Fetch multiple listings in parallel using HTTP requests.
 
     Args:
         ad_ids: List of ad IDs to fetch
         batch_size: Number of parallel requests per batch (uses settings default if None)
+        category_id: Optional category ID to set on all listings
 
     Returns:
         List of listing data dictionaries
@@ -311,9 +319,12 @@ async def fetch_multiple_listings(ad_ids: List[str], batch_size: int = None) -> 
         tasks = [fetch_blocket_api(ad_id) for ad_id in batch]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Filter out None results and exceptions
+        # Filter out None results and exceptions, and set category if provided
         for result in results:
             if result and not isinstance(result, Exception):
+                # Set category if provided (overrides null values from API)
+                if category_id:
+                    result['category'] = category_id
                 all_listings.append(result)
 
         # Small delay between batches to be nice to the server

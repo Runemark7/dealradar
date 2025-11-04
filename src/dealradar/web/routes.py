@@ -91,11 +91,12 @@ def register_routes(app):
     @app.route('/api/search', methods=['GET'])
     def search_listings():
         """
-        Search listings by category
+        Search listings by category with optional keyword search
 
         Query Parameters:
             category: Category ID (required)
             limit: Number of listings to return (default: 10)
+            keywords: Search keywords to pass to Blocket API (optional)
 
         Returns:
             JSON response with search results
@@ -104,6 +105,7 @@ def register_routes(app):
             # Get query parameters
             category_id = request.args.get('category')
             limit = request.args.get('limit', default=settings.DEFAULT_SEARCH_LIMIT, type=int)
+            keywords = request.args.get('keywords', '').strip()
 
             if not category_id:
                 return jsonify({
@@ -118,8 +120,8 @@ def register_routes(app):
                     "error": f"Limit must be between 1 and {settings.MAX_SEARCH_LIMIT}"
                 }), 400
 
-            # Run async functions in sync context
-            ad_ids = asyncio.run(fetch_search_results(category_id, limit))
+            # Run async functions in sync context - pass keywords to Blocket API
+            ad_ids = asyncio.run(fetch_search_results(category_id, limit, keywords if keywords else None))
 
             if not ad_ids:
                 return jsonify({
@@ -127,8 +129,8 @@ def register_routes(app):
                     "error": "No listings found for this category"
                 }), 404
 
-            # Fetch full details for all listings
-            listings = asyncio.run(fetch_multiple_listings(ad_ids))
+            # Fetch full details for all listings, passing category_id
+            listings = asyncio.run(fetch_multiple_listings(ad_ids, category_id=category_id))
 
             return jsonify({
                 "success": True,
@@ -136,6 +138,7 @@ def register_routes(app):
                     "total_fetched": len(listings),
                     "category": category_id,
                     "requested_limit": limit,
+                    "keywords": keywords if keywords else None,
                     "listings": listings
                 }
             }), 200
