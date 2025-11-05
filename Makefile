@@ -20,12 +20,12 @@ help:
 
 image:
 	@echo "Building container image..."
-	docker build -t $(IMAGE_NAME):latest -f Containerfile .
+	docker build --network=host -t $(IMAGE_NAME):latest -f Containerfile .
 
 run:
 	@echo "Starting API + database with docker-compose..."
 	@echo "(This will build the image if it doesn't exist)"
-	docker-compose up -d --build
+	docker-compose up -d
 	@echo ""
 	@echo "Services started:"
 	@echo "  - API running at http://localhost:5000"

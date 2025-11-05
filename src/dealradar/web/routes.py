@@ -158,6 +158,7 @@ def register_routes(app):
             category: Category ID (required)
             hours: Maximum age of listings in hours (default: 1)
             limit: Number of listings to return (default: 50)
+            keywords: Search keywords to pass to Blocket API (optional)
 
         Returns:
             JSON response with recent listings
@@ -167,6 +168,7 @@ def register_routes(app):
             category_id = request.args.get('category')
             hours = request.args.get('hours', default=1, type=int)
             limit = request.args.get('limit', default=50, type=int)
+            keywords = request.args.get('keywords', '').strip()
 
             if not category_id:
                 return jsonify({
@@ -188,8 +190,8 @@ def register_routes(app):
                     "error": "Limit must be between 1 and 99"
                 }), 400
 
-            # Run async function to get recent ad IDs
-            ad_ids = asyncio.run(fetch_recent_search_results(category_id, hours, limit))
+            # Run async function to get recent ad IDs - pass keywords to Blocket API
+            ad_ids = asyncio.run(fetch_recent_search_results(category_id, hours, limit, keywords if keywords else None))
 
             if not ad_ids:
                 return jsonify({
@@ -199,6 +201,7 @@ def register_routes(app):
                         "category": category_id,
                         "max_age_hours": hours,
                         "requested_limit": limit,
+                        "keywords": keywords if keywords else None,
                         "listings": []
                     }
                 }), 200
@@ -213,6 +216,7 @@ def register_routes(app):
                     "category": category_id,
                     "max_age_hours": hours,
                     "requested_limit": limit,
+                    "keywords": keywords if keywords else None,
                     "listings": listings
                 }
             }), 200

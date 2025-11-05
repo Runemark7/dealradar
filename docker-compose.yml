@@ -3,13 +3,12 @@ services:
     image: bitnami/postgresql:latest
     container_name: dealradar-postgres
     restart: unless-stopped
+    network_mode: host
     environment:
       POSTGRESQL_DATABASE: dealradar
       POSTGRESQL_USERNAME: dealradar
       POSTGRESQL_PASSWORD: dealradar
       POSTGRESQL_POSTGRES_PASSWORD: postgres_admin_password
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/bitnami/postgresql
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
@@ -25,10 +24,9 @@ services:
       dockerfile: Containerfile
     image: blocket-scraper:latest
     container_name: blocket-scraper
-    ports:
-      - "5000:5000"
+    network_mode: host
     environment:
-      DB_HOST: postgres
+      DB_HOST: localhost
       DB_PORT: 5432
       DB_NAME: dealradar
       DB_USER: dealradar

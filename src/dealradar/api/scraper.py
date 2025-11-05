@@ -86,7 +86,7 @@ async def fetch_search_results(category_id: str, limit: int = 10, keywords: str 
         return []
 
 
-async def fetch_recent_search_results(category_id: str, max_age_hours: int = 1, limit: int = 50) -> List[str]:
+async def fetch_recent_search_results(category_id: str, max_age_hours: int = 1, limit: int = 50, keywords: str = None) -> List[str]:
     """
     Fetch search results from Blocket API filtered by age.
 
@@ -94,6 +94,7 @@ async def fetch_recent_search_results(category_id: str, max_age_hours: int = 1, 
         category_id: Blocket category ID (e.g., "5021")
         max_age_hours: Maximum age of listings in hours (default 1)
         limit: Maximum number of listings to return (default 50)
+        keywords: Search keywords to filter results (optional)
 
     Returns:
         List of ad IDs for posts within the time window, sorted by timestamp (newest first)
@@ -101,11 +102,13 @@ async def fetch_recent_search_results(category_id: str, max_age_hours: int = 1, 
     try:
         from datetime import datetime, timedelta, timezone
 
-        print(f"[RECENT] Fetching listings from last {max_age_hours} hour(s) in category {category_id}...")
+        keywords_str = f" with keywords '{keywords}'" if keywords else ""
+        print(f"[RECENT] Fetching listings from last {max_age_hours} hour(s) in category {category_id}{keywords_str}...")
 
         # Fetch more results than needed to account for filtering
+        # When using keywords, always fetch the max to ensure we get recent posts
         # (API max is 99)
-        fetch_limit = min(99, limit * 3)
+        fetch_limit = 99 if keywords else min(99, limit * 3)
 
         # Build API request
         api_url = f"{settings.API_URL}/search_bff/v2/content"
@@ -114,6 +117,10 @@ async def fetch_recent_search_results(category_id: str, max_age_hours: int = 1, 
             "lim": fetch_limit,
             "status": "active"
         }
+
+        # Add search query if keywords provided
+        if keywords:
+            params["q"] = keywords
 
         # Try with cached token first, then retry with fresh token if 401
         search_api_data = None
