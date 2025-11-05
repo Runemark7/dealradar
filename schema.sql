@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS deal_requests (
     max_budget INTEGER,
     requirements TEXT,
     structured_prompt TEXT,
+    search_keyword VARCHAR(200),
     status VARCHAR(20) DEFAULT 'pending',  -- pending, active, fulfilled, expired
     approved BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
