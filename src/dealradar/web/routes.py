@@ -357,10 +357,11 @@ def register_routes(app):
                 SELECT dr.*,
                        COUNT(DISTINCT rs.id) as subscriber_count,
                        COUNT(DISTINCT rm.id) as match_count,
-                       MAX(rm.value_score) as best_match_score
+                       MAX(e.value_score) as best_match_score
                 FROM deal_requests dr
                 LEFT JOIN request_subscriptions rs ON dr.id = rs.request_id
                 LEFT JOIN request_matches rm ON dr.id = rm.request_id
+                LEFT JOIN evaluations e ON rm.ad_id = e.ad_id
                 GROUP BY dr.id
                 ORDER BY
                     CASE WHEN dr.status = 'active' THEN 1
@@ -414,7 +415,7 @@ def register_routes(app):
                 INNER JOIN posts p ON rm.ad_id = p.ad_id
                 LEFT JOIN evaluations e ON p.ad_id = e.ad_id
                 WHERE rm.request_id = %s
-                ORDER BY rm.value_score DESC, rm.matched_at DESC
+                ORDER BY e.value_score DESC, rm.matched_at DESC
             """, (request_id,))
             matches = cursor.fetchall()
 
