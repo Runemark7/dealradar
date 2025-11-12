@@ -436,13 +436,14 @@ def register_routes(app):
         """API endpoint to create a new deal request"""
         try:
             title = request.form.get('title', '').strip()
+            description = request.form.get('description', '').strip()
             category = request.form.get('category', '').strip()
             max_budget = request.form.get('max_budget', '').strip()
             requirements = request.form.get('requirements', '').strip()
             email = request.form.get('email', '').strip()
 
             # Validation
-            if not title or not category or not requirements or not email:
+            if not title or not description or not category or not requirements or not email:
                 return "Missing required fields", 400
 
             if len(title) > 200:
@@ -472,7 +473,7 @@ def register_routes(app):
                 (title, description, category, max_budget, requirements, status)
                 VALUES (%s, %s, %s, %s, %s, 'pending')
                 RETURNING id
-            """, (title, requirements, category, budget_int, requirements))
+            """, (title, description, category, budget_int, requirements))
 
             request_id = cursor.fetchone()['id']
 
