@@ -417,19 +417,17 @@ def register_routes(app):
                          WHEN e.status = 'completed' THEN 'evaluated'
                          WHEN p.continue_evaluate = FALSE THEN 'rejected'
                          ELSE 'pending'
-                       END as post_status
+                       END as post_status,
+                       CASE
+                         WHEN e.status = 'completed' THEN 1
+                         WHEN p.continue_evaluate = TRUE OR p.continue_evaluate IS NULL THEN 2
+                         ELSE 3
+                       END as sort_order
                 FROM posts p
                 LEFT JOIN request_matches rm ON p.ad_id = rm.ad_id AND rm.request_id = %s
                 LEFT JOIN evaluations e ON p.ad_id = e.ad_id
                 WHERE p.source_request_id = %s
-                ORDER BY
-                  CASE
-                    WHEN e.status = 'completed' THEN 1
-                    WHEN p.continue_evaluate = TRUE OR p.continue_evaluate IS NULL THEN 2
-                    ELSE 3
-                  END,
-                  e.value_score DESC NULLS LAST,
-                  p.discovered_at DESC
+                ORDER BY sort_order, e.value_score DESC NULLS LAST, p.discovered_at DESC
             """, (request_id, request_id))
             all_posts = cursor.fetchall()
 
