@@ -442,13 +442,17 @@ def register_routes(app):
             max_budget = request.form.get('max_budget', '').strip()
             requirements = request.form.get('requirements', '').strip()
             email = request.form.get('email', '').strip()
+            search_keyword = request.form.get('search_keyword', '').strip()
 
             # Validation
-            if not title or not description or not category or not requirements or not email:
+            if not title or not description or not category or not requirements or not email or not search_keyword:
                 return "Missing required fields", 400
 
             if len(title) > 200:
                 return "Title too long (max 200 characters)", 400
+
+            if len(search_keyword) > 200:
+                return "Search keyword too long (max 200 characters)", 400
 
             # Validate email format (basic)
             import re
@@ -471,10 +475,10 @@ def register_routes(app):
             # Insert request using parameterized query
             cursor.execute("""
                 INSERT INTO deal_requests
-                (title, description, category, max_budget, requirements, status)
-                VALUES (%s, %s, %s, %s, %s, 'pending')
+                (title, description, category, max_budget, requirements, search_keyword, status)
+                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
                 RETURNING id
-            """, (title, description, category, budget_int, requirements))
+            """, (title, description, category, budget_int, requirements, search_keyword))
 
             request_id = cursor.fetchone()['id']
 

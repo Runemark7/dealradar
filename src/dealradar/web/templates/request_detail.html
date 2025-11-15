@@ -53,6 +53,16 @@
             <div style="color: #333; font-weight: 600; font-size: 1.2em;">{{ request.category }}</div>
         </div>
         <div>
+            <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Search Keywords</div>
+            <div style="color: #333; font-weight: 600; font-size: 1.2em;">
+                {% if request.search_keyword %}
+                    {{ request.search_keyword }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+        </div>
+        <div>
             <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">Subscribers</div>
             <div style="color: #333; font-weight: 600; font-size: 1.2em;">{{ subscriptions|length }} 👥</div>
         </div>
