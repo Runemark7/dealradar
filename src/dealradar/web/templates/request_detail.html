@@ -105,24 +105,62 @@
     {% endif %}
 </div>
 
+{% if matches or pending_posts or rejected_posts %}
+
+<!-- Evaluated Matches -->
 {% if matches %}
-<div style="margin-bottom: 20px;">
+<div style="margin-bottom: 30px;">
     <h2 style="color: white; margin-bottom: 15px;">
-        🎯 Found Matches ({{ matches|length }})
+        🎯 Evaluated Matches ({{ matches|length }})
     </h2>
     <p style="color: rgba(255,255,255,0.9); margin-bottom: 20px;">
-        Here are the deals that match your requirements:
+        Posts that have been evaluated and match your requirements:
     </p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px; margin-bottom: 30px;">
+        {% for match in matches %}
+            {{ render_deal_card(match, 'evaluated') }}
+        {% endfor %}
+    </div>
 </div>
+{% endif %}
 
-<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px;">
-    {% for match in matches %}
-        {{ render_deal_card(match) }}
-    {% endfor %}
+<!-- Pending Evaluation -->
+{% if pending_posts %}
+<div style="margin-bottom: 30px;">
+    <h2 style="color: white; margin-bottom: 15px;">
+        ⏳ Pending Evaluation ({{ pending_posts|length }})
+    </h2>
+    <p style="color: rgba(255,255,255,0.9); margin-bottom: 20px;">
+        Posts awaiting AI evaluation:
+    </p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px; margin-bottom: 30px;">
+        {% for post in pending_posts %}
+            {{ render_deal_card(post, 'pending') }}
+        {% endfor %}
+    </div>
 </div>
+{% endif %}
+
+<!-- Rejected Posts -->
+{% if rejected_posts %}
+<div style="margin-bottom: 30px;">
+    <h2 style="color: white; margin-bottom: 15px;">
+        ❌ Not Relevant ({{ rejected_posts|length }})
+    </h2>
+    <p style="color: rgba(255,255,255,0.9); margin-bottom: 20px;">
+        Posts that don't match your requirements:
+    </p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px;">
+        {% for post in rejected_posts %}
+            {{ render_deal_card(post, 'rejected') }}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {% else %}
 <div style="background: white; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <h3 style="color: #333; margin-bottom: 10px;">No Matches Yet</h3>
+    <h3 style="color: #333; margin-bottom: 10px;">No Posts Yet</h3>
     <p style="color: #666;">
         {% if request.status == 'active' %}
             We're actively searching for deals that match your requirements. You'll be notified when we find something!
@@ -144,6 +182,40 @@
     }
     button:hover {
         background: #5568d3 !important;
+    }
+
+    /* Post status styling */
+    .deal-card-pending {
+        border-left: 4px solid #F59E0B;
+    }
+    .deal-card-rejected {
+        border-left: 4px solid #EF4444;
+        opacity: 0.85;
+    }
+    .deal-status {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.85em;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+    .deal-status-pending {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+    .deal-status-rejected {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+    .deal-rejection-reason {
+        background: #FEF2F2;
+        border: 1px solid #FECACA;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 15px;
+        color: #7F1D1D;
+        font-size: 0.9em;
     }
 </style>
 

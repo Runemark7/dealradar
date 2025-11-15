@@ -1,11 +1,23 @@
-{% macro render_deal_card(deal) %}
-<div class="deal-card">
+{% macro render_deal_card(deal, post_status='evaluated') %}
+<div class="deal-card {% if post_status == 'rejected' %}deal-card-rejected{% elif post_status == 'pending' %}deal-card-pending{% endif %}">
     <div class="deal-header">
+        {% if post_status == 'evaluated' %}
         <div class="deal-score">⭐ {{ deal.value_score }}/10</div>
+        {% elif post_status == 'pending' %}
+        <div class="deal-status deal-status-pending">⏳ Pending Evaluation</div>
+        {% elif post_status == 'rejected' %}
+        <div class="deal-status deal-status-rejected">❌ Not Relevant</div>
+        {% endif %}
         <div class="deal-title">{{ deal.title }}</div>
         <div class="deal-price">{{ deal.price }}</div>
     </div>
     <div class="deal-body">
+        {% if post_status == 'rejected' and deal.continue_evaluate_reasoning %}
+        <div class="deal-rejection-reason">
+            <strong>Reason:</strong> {{ deal.continue_evaluate_reasoning }}
+        </div>
+        {% endif %}
+
         {% if deal.notification_message %}
         <div class="deal-notification">{{ deal.notification_message }}</div>
         {% endif %}
@@ -24,9 +36,20 @@
             {% endfor %}
         </div>
         {% endif %}
+
+        {% if post_status == 'pending' %}
+        <div class="deal-info">
+            <div class="deal-info-label">Description</div>
+            <div class="deal-info-value" style="font-size: 0.9em;">{{ deal.description[:200] }}{% if deal.description|length > 200 %}...{% endif %}</div>
+        </div>
+        {% endif %}
     </div>
     <div class="deal-footer">
+        {% if post_status == 'evaluated' %}
         <span class="deal-date">Evaluated: {{ deal.evaluated_at.strftime('%Y-%m-%d %H:%M') if deal.evaluated_at else 'N/A' }}</span>
+        {% else %}
+        <span class="deal-date">Discovered: {{ deal.discovered_at.strftime('%Y-%m-%d %H:%M') if deal.discovered_at else 'N/A' }}</span>
+        {% endif %}
         <a href="https://www.blocket.se/annons/{{ deal.ad_id }}" target="_blank">View on Blocket →</a>
     </div>
 </div>

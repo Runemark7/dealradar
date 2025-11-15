@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS posts (
     images JSONB,
     source_request_id INTEGER,  -- FK constraint added later after deal_requests table exists
     discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    raw_data JSONB
+    raw_data JSONB,
+    continue_evaluate BOOLEAN DEFAULT FALSE,  -- Whether to continue evaluating this post
+    continue_evaluate_reasoning TEXT  -- AI reasoning for whether to evaluate this post
 );
 
 -- Evaluations table: tracks AI evaluation results
@@ -58,6 +60,13 @@ SELECT p.*
 FROM posts p
 LEFT JOIN evaluations e ON p.ad_id = e.ad_id
 WHERE e.ad_id IS NULL OR e.status = 'pending';
+
+CREATE OR REPLACE VIEW posts_to_evaluate AS
+SELECT p.*
+FROM posts p
+LEFT JOIN evaluations e ON p.ad_id = e.ad_id
+WHERE p.continue_evaluate = TRUE
+  AND (e.ad_id IS NULL OR e.status = 'pending');
 
 CREATE OR REPLACE VIEW high_value_deals AS
 SELECT p.*, e.value_score, e.evaluation_notes, e.evaluated_at

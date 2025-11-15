@@ -407,17 +407,36 @@ def register_routes(app):
             cursor.execute("SELECT * FROM request_subscriptions WHERE request_id = %s", (request_id,))
             subscriptions = cursor.fetchall()
 
-            # Get matches with full post details
+            # Get all posts for this request (evaluated, pending, and rejected)
             cursor.execute("""
-                SELECT p.*, e.value_score, e.evaluation_notes, e.notification_message,
-                       e.estimated_market_value, e.specs, e.evaluated_at, rm.matched_at
-                FROM request_matches rm
-                INNER JOIN posts p ON rm.ad_id = p.ad_id
+                SELECT DISTINCT p.*,
+                       e.value_score, e.evaluation_notes, e.notification_message,
+                       e.estimated_market_value, e.specs, e.evaluated_at, e.status as eval_status,
+                       rm.matched_at,
+                       CASE
+                         WHEN e.status = 'completed' THEN 'evaluated'
+                         WHEN p.continue_evaluate = FALSE THEN 'rejected'
+                         ELSE 'pending'
+                       END as post_status
+                FROM posts p
+                LEFT JOIN request_matches rm ON p.ad_id = rm.ad_id AND rm.request_id = %s
                 LEFT JOIN evaluations e ON p.ad_id = e.ad_id
-                WHERE rm.request_id = %s
-                ORDER BY e.value_score DESC, rm.matched_at DESC
-            """, (request_id,))
-            matches = cursor.fetchall()
+                WHERE p.source_request_id = %s
+                ORDER BY
+                  CASE
+                    WHEN e.status = 'completed' THEN 1
+                    WHEN p.continue_evaluate = TRUE OR p.continue_evaluate IS NULL THEN 2
+                    ELSE 3
+                  END,
+                  e.value_score DESC NULLS LAST,
+                  p.discovered_at DESC
+            """, (request_id, request_id))
+            all_posts = cursor.fetchall()
+
+            # Categorize posts
+            evaluated = [p for p in all_posts if p.get('post_status') == 'evaluated']
+            pending = [p for p in all_posts if p.get('post_status') == 'pending']
+            rejected = [p for p in all_posts if p.get('post_status') == 'rejected']
 
             cursor.close()
             conn.close()
@@ -426,7 +445,9 @@ def register_routes(app):
                 'request_detail.html',
                 request=request,
                 subscriptions=subscriptions,
-                matches=matches
+                matches=evaluated,
+                pending_posts=pending,
+                rejected_posts=rejected
             )
 
         except Exception as e:
