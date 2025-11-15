@@ -107,56 +107,79 @@
 
 {% if matches or pending_posts or rejected_posts %}
 
-<!-- Evaluated Matches -->
-{% if matches %}
-<div style="margin-bottom: 30px;">
-    <h2 style="color: white; margin-bottom: 15px;">
-        🎯 Evaluated Matches ({{ matches|length }})
-    </h2>
-    <p style="color: rgba(255,255,255,0.9); margin-bottom: 20px;">
-        Posts that have been evaluated and match your requirements:
-    </p>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px; margin-bottom: 30px;">
-        {% for match in matches %}
-            {{ render_deal_card(match, 'evaluated') }}
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-<!-- Pending Evaluation -->
+<!-- Evaluation Queue (Pending Posts) -->
 {% if pending_posts %}
 <div style="margin-bottom: 30px;">
     <h2 style="color: white; margin-bottom: 15px;">
-        ⏳ Pending Evaluation ({{ pending_posts|length }})
+        ⏳ Evaluation Queue ({{ pending_posts|length }} posts)
     </h2>
-    <p style="color: rgba(255,255,255,0.9); margin-bottom: 20px;">
-        Posts awaiting AI evaluation:
-    </p>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px; margin-bottom: 30px;">
-        {% for post in pending_posts %}
-            {{ render_deal_card(post, 'pending') }}
-        {% endfor %}
+    <div class="queue-container">
+        <div class="queue-scroll">
+            {% for post in pending_posts %}
+            <div class="queue-card">
+                <div style="font-weight: 600; font-size: 0.9em; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {{ post.title }}
+                </div>
+                <div style="color: #667eea; font-weight: 700; font-size: 1.1em; margin-bottom: 8px;">
+                    {{ post.price }}
+                </div>
+                <div style="font-size: 0.75em; color: #666; margin-bottom: 10px;">
+                    {{ post.discovered_at.strftime('%Y-%m-%d %H:%M') if post.discovered_at else 'N/A' }}
+                </div>
+                <a href="https://www.blocket.se/annons/{{ post.ad_id }}" target="_blank" style="font-size: 0.75em; color: #667eea; text-decoration: none;">
+                    View →
+                </a>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 {% endif %}
 
-<!-- Rejected Posts -->
-{% if rejected_posts %}
-<div style="margin-bottom: 30px;">
-    <h2 style="color: white; margin-bottom: 15px;">
-        ❌ Not Relevant ({{ rejected_posts|length }})
-    </h2>
-    <p style="color: rgba(255,255,255,0.9); margin-bottom: 20px;">
-        Posts that don't match your requirements:
-    </p>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px;">
-        {% for post in rejected_posts %}
-            {{ render_deal_card(post, 'rejected') }}
-        {% endfor %}
+<!-- Tab Navigation -->
+<div class="tabs">
+    <button class="tab-button active" onclick="switchTab('evaluated')" id="tab-evaluated">
+        ✓ Evaluated ({{ matches|length }})
+    </button>
+    <button class="tab-button" onclick="switchTab('rejected')" id="tab-rejected">
+        ❌ Rejected ({{ rejected_posts|length }})
+    </button>
+</div>
+
+<!-- Tab Content -->
+<div class="tab-content">
+    <!-- Evaluated Tab -->
+    <div id="content-evaluated" class="tab-panel active">
+        {% if matches %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px;">
+            {% for match in matches %}
+                {{ render_deal_card(match, 'evaluated') }}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="background: white; border-radius: 12px; padding: 40px; text-align: center;">
+            <h3 style="color: #333;">No Evaluated Posts Yet</h3>
+            <p style="color: #666;">Posts will appear here once they've been evaluated.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Rejected Tab -->
+    <div id="content-rejected" class="tab-panel">
+        {% if rejected_posts %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px;">
+            {% for post in rejected_posts %}
+                {{ render_deal_card(post, 'rejected') }}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="background: white; border-radius: 12px; padding: 40px; text-align: center;">
+            <h3 style="color: #333;">No Rejected Posts</h3>
+            <p style="color: #666;">Posts that don't match your requirements will appear here.</p>
+        </div>
+        {% endif %}
     </div>
 </div>
-{% endif %}
 
 {% else %}
 <div style="background: white; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -182,6 +205,92 @@
     }
     button:hover {
         background: #5568d3 !important;
+    }
+
+    /* Queue styling */
+    .queue-container {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 20px;
+        overflow: hidden;
+    }
+    .queue-scroll {
+        display: flex;
+        gap: 15px;
+        overflow-x: auto;
+        padding-bottom: 10px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(102, 126, 234, 0.5) rgba(255, 255, 255, 0.1);
+    }
+    .queue-scroll::-webkit-scrollbar {
+        height: 8px;
+    }
+    .queue-scroll::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+    }
+    .queue-scroll::-webkit-scrollbar-thumb {
+        background: rgba(102, 126, 234, 0.5);
+        border-radius: 4px;
+    }
+    .queue-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgba(102, 126, 234, 0.7);
+    }
+    .queue-card {
+        min-width: 200px;
+        max-width: 200px;
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        flex-shrink: 0;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .queue-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    /* Tab styling */
+    .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    }
+    .tab-button {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: none;
+        padding: 12px 24px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s;
+        margin-bottom: -2px;
+    }
+    .tab-button:hover {
+        color: white !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+    }
+    .tab-button.active {
+        color: white;
+        border-bottom-color: #667eea;
+    }
+    .tab-content {
+        min-height: 300px;
+    }
+    .tab-panel {
+        display: none;
+    }
+    .tab-panel.active {
+        display: block;
+        animation: fadeIn 0.3s;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
     /* Post status styling */
@@ -220,6 +329,18 @@
 </style>
 
 <script>
+    // Tab switching function
+    function switchTab(tabName) {
+        // Remove active class from all tabs and panels
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+
+        // Add active class to selected tab and panel
+        document.getElementById('tab-' + tabName).classList.add('active');
+        document.getElementById('content-' + tabName).classList.add('active');
+    }
+
+    // HTMX subscription handler
     document.body.addEventListener('htmx:afterRequest', function(event) {
         if (event.detail.pathInfo.requestPath.includes('/subscribe')) {
             const messageDiv = document.getElementById('subscribe-message');
